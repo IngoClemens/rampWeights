@@ -1,0 +1,96 @@
+//
+// Procedure Name:
+//      getNextIndex
+//
+// Description:
+//      Return the next available weight list index of the ramp weights
+//      node which is not used or connected.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//
+// Return Value:
+//      int             The next available weight list index.
+//
+proc int getNextIndex( string $node )
+{
+    int $index = -1;
+
+    string $attr = $node + ".weightList";
+    int $ids[] = `getAttr -mi $attr`;
+    for ($i = 0; $i < size($ids); $i ++)
+    {
+        if ($index == -1)
+        {
+            string $conn[] = `connectionInfo -destinationFromSource ($attr + "[" + $i + "].weights")`;
+            if (!size($conn))
+            {
+                $index = $i;
+                break;
+            }
+        }
+    }
+    if ($index == -1)
+        $index = size($ids);
+
+    return $index;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsConnectDeformer
+//
+// Description:
+//      Swap the order of the selected collider meshes.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      deformer        The name of the deformer to be controlled.
+//      index           The index of the blend shape target if any.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsConnectDeformer( string $node, string $deformer, int $index )
+{
+    int $nextIndex = getNextIndex($node);
+    string $srcAttr = $node + ".weightList[" + $nextIndex + "].weights";
+    string $destAttr = $deformer + ".weightList[0].weights";
+
+    if (`nodeType $deformer` == "blendShape")
+        $destAttr = $deformer + ".inputTarget[0].inputTargetGroup[" + $index + "].targetWeights";
+
+    connectAttr -force $srcAttr $destAttr;
+
+    if (`getAttr ($node + ".useTransform")`)
+        brRampWeightsConnectDeformedTransform($node, $deformer);
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights is under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

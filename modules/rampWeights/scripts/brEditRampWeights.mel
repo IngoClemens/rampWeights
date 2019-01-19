@@ -1,0 +1,1445 @@
+//
+// Procedure Name:
+//      brEditRampWeights
+//
+// Description:
+//      Editor for the ramp weights node.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+
+
+// ---------------------------------------------------------------------
+//
+// run by executing the following command:
+//
+// brEditRampWeights;
+//
+// ---------------------------------------------------------------------
+
+
+//
+// Procedure Name:
+//      attachUpdateScript
+//
+// Description:
+//      Create a script job for refreshing the editor when the selection
+//      changes.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+proc attachUpdateScript()
+{
+    scriptJob -parent brRampWeightsNodeOption
+              -event "SelectionChanged" "brRampWeightsAutoRefresh";
+}
+
+
+//
+// Procedure Name:
+//      displayPluginError
+//
+// Description:
+//      Display that a conflicting version or the ramp weights plug-in
+//      is currently loaded.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+proc displayPluginError()
+{
+    string $path = `pluginInfo -query -path "rampWeights"`;
+
+    setParent brRampWeightsDeformerLayout;
+
+    text -align "left" -label (uiRes("m_brEditRampWeights.kVersionWarning1"));
+    text -align "left" -font "obliqueLabelFont" -label $path;
+
+    separator -height 15 -style "none";
+
+    text -align "left" -label (uiRes("m_brEditRampWeights.kVersionWarning2"));
+    columnLayout;
+        button -label "Unload Plug-In and Re-Open Editor"
+               -command "flushUndo; unloadPlugin rampWeights; evalDeferred(\"brEditRampWeights\");"
+               -width 220;
+    setParent ..;
+
+    separator -height 15 -style "none";
+
+    text -align "left" -label (uiRes("m_brEditRampWeights.kVersionWarning3"));
+
+    optionMenu -edit -manage 0 brRampWeightsNodeOption;
+    symbolCheckBox -edit -manage 0 brRampWeightsUpdateCheck;
+    iconTextButton -edit -manage 0 brRampWeightsCreateButton;
+    control -edit -manage 0 (`columnLayout -query -parent brRampWeightsAttributesLayout`);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsEditUI
+//
+// Description:
+//      Create the editor window
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsEditUI()
+{
+    if (`window -ex brRampWeightsEditWin`)
+        deleteUI brRampWeightsEditWin;
+
+    window -title "Edit Ramp Weights" -widthHeight 650 450 brRampWeightsEditWin;
+
+    string $mainForm = `formLayout`;
+
+    string $mainScroll = `scrollLayout -childResizable 1`;
+
+    string $mainLayout = `columnLayout -adjustableColumn 1`;
+
+        // -------------------------------------------------------------
+        // node selector
+        // -------------------------------------------------------------
+
+        string $nodeOptionForm = `formLayout`;
+            string $nodeLabel = `text -label "Ramp Weights" -align "left" -width 90`;
+
+            optionMenu -changeCommand brRampWeightsGetData
+                       -annotation (uiRes("m_brEditRampWeights.kNodeOption"))
+                       brRampWeightsNodeOption;
+                menuItem -label "None";
+
+            popupMenu;
+                menuItem -label "Select Ramp Weights"
+                         -command ("if (brRampWeightsGetSelectedNodeOption() != \"\") " +
+                                   "select -r (brRampWeightsGetSelectedNodeOption());");
+                menuItem -divider 1;
+                string $deleteCmd1 = ("if (brRampWeightsGetSelectedNodeOption() != \"\") { " +
+                                      "select -r (brRampWeightsGetSelectedNodeOption()); " +
+                                      "brRampWeightsDeleteNode 0; brRampWeightsRefreshUI;}");
+                string $deleteCmd2 = ("if (brRampWeightsGetSelectedNodeOption() != \"\") { " +
+                                      "select -r (brRampWeightsGetSelectedNodeOption()); " +
+                                      "brRampWeightsDeleteNode 1; brRampWeightsRefreshUI;}");
+                menuItem -label "Delete Ramp Weights Node" -command $deleteCmd1;
+                menuItem -label "Delete Ramp Weights Node And Remove Weights" -command $deleteCmd2;
+
+            string $updateButton = `symbolCheckBox -width 26
+                                                   -height 26
+                                                   -onImage "rampWeightsUpdateOn.svg"
+                                                   -offImage "rampWeightsUpdateOff.svg"
+                                                   -value 1
+                                                   -changeCommand brRampWeightsRefreshUI
+                                                   -annotation (uiRes("m_brEditRampWeights.kUpdate"))
+                                                   brRampWeightsUpdateCheck`;
+            string $createButton = `iconTextButton -width 26
+                                                   -height 26
+                                                   -image "rampWeightsCreate.svg"
+                                                   -command brRampWeightsPerformCreate
+                                                   -annotation (uiRes("m_brEditRampWeights.kCreate"))
+                                                   brRampWeightsCreateButton`;
+
+            formLayout  -edit
+
+                        -attachForm $nodeLabel "top" 7
+                        -attachForm $nodeLabel "left" 5
+                        -attachForm brRampWeightsNodeOption "top" 5
+                        -attachForm $updateButton "top" 2
+                        -attachForm $createButton "top" 2
+                        -attachForm $createButton "right" 5
+
+                        -attachControl brRampWeightsNodeOption "left" 3 $nodeLabel
+                        -attachControl brRampWeightsNodeOption "right" 10 $updateButton
+                        -attachControl $updateButton "right" 5 $createButton
+
+                        $nodeOptionForm;
+        setParent $mainLayout;
+
+        separator -style "none" -height 5;
+
+        // -------------------------------------------------------------
+        // connected deformer
+        // -------------------------------------------------------------
+
+        int $state = `optionVar -query "brRampWeightsDeformerFrameState"`;
+        string $deformerFrame = `frameLayout -label "Deformer"
+                                             -labelIndent 3
+                                             -collapsable 1
+                                             -collapse $state
+                                             -marginWidth 5
+                                             -marginHeight 5`;
+            columnLayout -adjustableColumn 1 brRampWeightsDeformerLayout;
+                ;
+        setParent $mainLayout;
+
+        // -------------------------------------------------------------
+        // ramp weights attributes
+        // -------------------------------------------------------------
+
+        $state = `optionVar -query "brRampWeightsAttributesFrameState"`;
+        string $attributesFrame = `frameLayout -label "Attributes"
+                                               -labelIndent 3
+                                               -collapsable 1
+                                               -collapse $state
+                                               -marginWidth 5
+                                               -marginHeight 5`;
+            columnLayout -adjustableColumn 1 brRampWeightsAttributesLayout;
+                ;
+        setParent $mainLayout;
+
+    setParent $mainForm;
+
+    string $closeButton = `button -l "Close" -c brRampWeightsCloseUI`;
+
+    formLayout  -e
+
+                -af $mainScroll "top" 0
+                -af $mainScroll "left" 0
+                -af $mainScroll "right" 0
+                -af $closeButton "left" 5
+                -af $closeButton "right" 5
+                -af $closeButton "bottom" 5
+
+                -ac $mainScroll "bottom" 10 $closeButton
+
+                $mainForm;
+
+    // -----------------------------------------------------------------
+    // collapse commands
+    // -----------------------------------------------------------------
+
+    frameLayout -edit
+                -collapseCommand ("optionVar -intValue brRampWeightsDeformerFrameState " +
+                                  "(`frameLayout -query -collapse " + $deformerFrame + "`)")
+                $deformerFrame;
+    frameLayout -edit
+                -expandCommand ("optionVar -intValue brRampWeightsDeformerFrameState " +
+                                "(`frameLayout -query -collapse " + $deformerFrame + "`)")
+                $deformerFrame;
+    frameLayout -edit
+                -collapseCommand ("optionVar -intValue brRampWeightsAttributesFrameState " +
+                                  "(`frameLayout -query -collapse " + $attributesFrame + "`)")
+                $attributesFrame;
+    frameLayout -edit
+                -expandCommand ("optionVar -intValue brRampWeightsAttributesFrameState " +
+                                "(`frameLayout -query -collapse " + $attributesFrame + "`)")
+                $attributesFrame;
+
+    showWindow brRampWeightsEditWin;
+
+    brRampWeightsBuildMenu;
+}
+
+
+// ---------------------------------------------------------------------
+// cleanup
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brRampWeightsCloseUI
+//
+// Description:
+//      Close and remove the editor window.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCloseUI()
+{
+    if (`window -ex brRampWeightsEditWin`)
+        deleteUI brRampWeightsEditWin;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsClearAll
+//
+// Description:
+//      Delete all deformer items and node attributes.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsClearAll()
+{
+    brRampWeightsRemoveChildItems "brRampWeightsDeformerLayout";
+    brRampWeightsRemoveChildItems "brRampWeightsAttributesLayout";
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsRemoveChildItems
+//
+// Description:
+//      Delete all controls from the given layout.
+//
+// Input Arguments:
+//      layout          The name of the layout to clear.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsRemoveChildItems( string $layout )
+{
+    string $items[] = `columnLayout -query -childArray $layout`;
+    for ($i in $items)
+        deleteUI $i;
+}
+
+
+//
+// Procedure Name:
+//      getNodeFromSelection
+//
+// Description:
+//      Return the first ramp weights node from the history of the
+//      selection. If the selection is a transform, check if it's
+//      connected to a ramp weights node as a placement transform. In
+//      this case return the connected ramp weights node.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      string          The first ramp weights node found on the
+//                      object's history.
+//
+proc string getNodeFromSelection()
+{
+    string $node;
+
+    string $sel[] = `ls -sl`;
+    if (!size($sel))
+        return $node;
+
+    string $hist[] = `listHistory`;
+    for ($node in $hist)
+    {
+        if (`nodeType $node` == "rampWeights")
+            return $node;
+    }
+
+    if (`nodeType $sel[0]` == "transform")
+    {
+        string $conn[] = `connectionInfo -destinationFromSource ($sel[0] + ".worldMatrix[0]")`;
+        string $items[] = stringToStringArray($conn[0], ".");
+        if (size($items) && `nodeType $items[0]` == "rampWeights")
+            return $items[0];
+    }
+
+    return $node;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsRefreshUI
+//
+// Description:
+//      Remove all items from the editor and load the ramp weights node
+//      from the current selection if any.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsRefreshUI()
+{
+    brRampWeightsBuildMenu;
+    brRampWeightsClearAll;
+
+    string $node = getNodeFromSelection();
+    if ($node != "")
+        brRampWeightsSelectOptionByName($node);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsAutoRefresh
+//
+// Description:
+//      Refresh the UI if the current node is not locked.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsAutoRefresh()
+{
+    if (`symbolCheckBox -query -value brRampWeightsUpdateCheck`)
+        brRampWeightsRefreshUI();
+}
+
+// ---------------------------------------------------------------------
+// ramp weights option menu
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brRampWeightsBuildMenu
+//
+// Description:
+//      Build the option menu for the ramp weights node and collect all
+//      ramp weights nodes from the scene.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsBuildMenu()
+{
+    if (`optionMenu -exists brRampWeightsNodeOption`)
+    {
+        string $items[] = `optionMenu -query -itemListLong brRampWeightsNodeOption`;
+        for ($c in $items)
+            deleteUI $c;
+    }
+
+    menuItem -label "Select" -parent brRampWeightsNodeOption;
+
+    string $nodes[] = `ls -type rampWeights`;
+    for ($n in $nodes)
+        menuItem -label $n -parent brRampWeightsNodeOption;
+
+    if (!size($nodes))
+        brRampWeightsClearAll;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsGetSelectedNodeOption
+//
+// Description:
+//      Return the name of the selected node in the option menu.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      string          The name of the selected node.
+//
+global proc string brRampWeightsGetSelectedNodeOption()
+{
+    string $node = `optionMenu -query -value brRampWeightsNodeOption`;
+    if ($node == "Select")
+        $node = "";
+    return $node;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsSelectOptionByName
+//
+// Description:
+//      Select the given node name in the option menu and refresh the
+//      ui.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsSelectOptionByName( string $node )
+{
+    string $items[] = `optionMenu -query -itemListLong brRampWeightsNodeOption`;
+    int $index = -1;
+    for ($i = 0; $i < size($items); $i ++)
+    {
+        if (`menuItem -query -label $items[$i]` == $node)
+        {
+            $index = $i + 1;
+            break;
+        }
+    }
+
+    if ($index > -1)
+    {
+        optionMenu -edit -select $index brRampWeightsNodeOption;
+        brRampWeightsGetData;
+    }
+}
+
+
+// ---------------------------------------------------------------------
+// get the data from an existing setup
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brRampWeightsGetData
+//
+// Description:
+//      Get the controlled deformer from the selected node and populate
+//      the editor.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsGetData()
+{
+    brRampWeightsClearAll;
+
+    string $node = brRampWeightsGetSelectedNodeOption();
+    if ($node == "")
+        return;
+
+    brRampWeightsGetDeformers;
+    brRampWeightsCreateAttributeControls($node);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsGetDeformers
+//
+// Description:
+//      Get all controlled deformers of the selected node and generate
+//      the list items.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsGetDeformers()
+{
+    brRampWeightsRemoveChildItems "brRampWeightsDeformerLayout";
+
+    string $node = brRampWeightsGetSelectedNodeOption();
+    if ($node == "")
+        return;
+
+    int $outIds[] = `getAttr -multiIndices ($node + ".weightList")`;
+    for ($id in $outIds)
+        brRampWeightsCreateDeformerItem($node, $id);
+
+    brRampWeightsCreateAddDeformerButton($node);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsCreateDeformerItem
+//
+// Description:
+//      Create the list item for the given deformer and index.
+//
+// Input Arguments:
+//      node            The ramp weights node.
+//      index           The index of the weights output.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCreateDeformerItem( string $node, int $index )
+{
+    // Get the deformer name from the given output attribute.
+    string $deformer;
+    int $targetId = -1;
+    string $targetName = "";
+
+    string $conn[] = `listConnections -source 0
+                                      -destination 1
+                                      -plugs 1
+                                      ($node + ".weightList[" + $index + "].weights")`;
+    if (!size($conn))
+        return;
+
+    // In case of a blend shape node get the name of the target channel.
+    string $items[] = stringToStringArray($conn[0], ".");
+    $deformer = $items[0];
+    if (`gmatch $items[size($items) - 2] "*inputTargetGroup*"`)
+    {
+        $targetId = `match "[0-9]+" $items[size($items) - 2]`;
+        string $shapes[] = `aliasAttr -query $deformer`;
+        for ($i = 0; $i < size($shapes); $i ++)
+        {
+            if (`match "[0-9]+" $shapes[$i + 1]` == $targetId)
+            {
+                $targetName = $shapes[$i];
+                break;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Create the list item.
+    // -----------------------------------------------------------------
+    setParent brRampWeightsDeformerLayout;
+
+    string $form = `formLayout`;
+
+    // -----------------------------------------------------------------
+    // deformer information
+    // -----------------------------------------------------------------
+    string $indexText = `text -label ("Output " + $index + ":") -align "left" -font "boldLabelFont"`;
+    string $deformerText = `text -label $deformer -align "left"`;
+    popupMenu;
+        menuItem -label "Select" -command ("select -replace " + $deformer);
+
+    string $label2 = "";
+    string $label3 = "";
+    if ($targetId >= 0)
+    {
+        $label2 = "Channel " + $targetId + ": ";
+        $label3 = $targetName;
+    }
+    string $l2 = `text -label $label2 -align "left" -font "obliqueLabelFont"`;
+    string $l3 = `text -label $label3 -align "left"`;
+
+    // -----------------------------------------------------------------
+    // value slider
+    // -----------------------------------------------------------------
+    string $slider = `floatSlider -width 75 -minValue 0 -maxValue 1`;
+
+    // -----------------------------------------------------------------
+    // buttons
+    // -----------------------------------------------------------------
+    string $cmd = "setAttr " + $node + ".invertList[" + $index + "]";
+    int $value = `getAttr ($node + ".invertList[" + $index + "]")`;
+    string $invert = `symbolCheckBox -width 26
+                                     -height 26
+                                     -onImage "rampWeightsInvertOn.svg"
+                                     -offImage "rampWeightsInvertOff.svg"
+                                     -value $value
+                                     -changeCommand ($cmd + " #1")
+                                     -annotation (uiRes("m_brEditRampWeights.kChannelInvert"))`;
+
+    string $btn1 = `iconTextButton -style "iconOnly"
+                                   -annotation (uiRes("m_brEditRampWeights.kTransform"))
+                                   ("brRampWeightsTransformButton" + $index)`;
+        popupMenu;
+            menuItem -label "Connect Selected Transform"
+                     -command ("brRampWeightsConnectSelectedTransform \"" + $node + "\" " + $index);
+            menuItem -label "Disconnect"
+                     -command ("brRampWeightsDisconnectTransform \"" + $node + "\" " + $index);
+            menuItem -label "Delete"
+                     -command ("brRampWeightsDeleteTransform \"" + $node + "\" " + $index)
+                     ("brRampWeightsDeleteTransformItem" + $index);
+
+    $cmd = "brRampWeightsRemoveDeformerAtIndex \"" + $node + "\" " + $index + " \"" + $deformer + "\"";
+    string $btn2 = `iconTextButton -style "iconOnly"
+                                   -image "rampWeightsDisconnect.svg"
+                                   -command ($cmd + " 0")
+                                   -annotation (uiRes("m_brEditRampWeights.kDisconnectKeep"))`;
+    string $btn3 = `iconTextButton -style "iconOnly"
+                                   -image "rampWeightsDisconnectDelete.svg"
+                                   -command ($cmd + " 1")
+                                   -annotation (uiRes("m_brEditRampWeights.kDisconnect"))`;
+
+    // -----------------------------------------------------------------
+    // layout
+    // -----------------------------------------------------------------
+    string $div = `separator -style "in" -horizontal 1`;
+
+    formLayout  -edit
+
+                -attachForm $indexText "left" 0
+                -attachForm $indexText "top" 10
+                -attachForm $deformerText "top" 10
+                -attachForm $l2 "top" 10
+                -attachForm $l3 "top" 10
+                -attachForm $slider "top" 10
+                -attachForm $invert "top" 3
+                -attachForm $btn1 "top" 3
+                -attachForm $btn2 "top" 3
+                -attachForm $btn3 "top" 3
+                -attachForm $btn3 "right" 0
+                -attachForm $div "left" 0
+                -attachForm $div "right" 0
+
+                -attachControl $deformerText "left" 5 $indexText
+                -attachControl $l2 "left" 0 $deformerText
+                -attachControl $l3 "left" 0 $l2
+                -attachControl $l3 "right" 25 $slider
+                -attachControl $slider "right" 10 $invert
+                -attachControl $invert "right" 5 $btn1
+                -attachControl $btn1 "right" 15 $btn2
+                -attachControl $btn2 "right" 5 $btn3
+                -attachControl $div "top" 5 $btn3
+
+                -attachPosition $deformerText "right" 0 30
+
+                $form;
+
+    setParent ..;
+
+    // -----------------------------------------------------------------
+    // commands
+    // -----------------------------------------------------------------
+    string $sliderAttr = $deformer + ".w[" + $targetId + "]";
+    if ($targetId == -1)
+        $sliderAttr = $deformer + ".envelope";
+    connectControl $slider $sliderAttr;
+    floatSlider -edit -annotation $sliderAttr $slider;
+
+    // Define the state of the transform button depending on whether the
+    // matrixList item is connected or not.
+    string $plug = `connectionInfo -sourceFromDestination ($node + ".matrixList[" + $index + "]")`;
+    int $connected = 0;
+    if ($plug != "")
+        $connected = 1;
+    brRampWeightsSetTransformButton($node, $index, $connected);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsCreateAddDeformerButton
+//
+// Description:
+//      Create the button for adding one or more deformer to the ramp
+//      weights node.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCreateAddDeformerButton( string $node )
+{
+    setParent brRampWeightsDeformerLayout;
+
+    columnLayout;
+        separator -style "none" -height 10;
+        iconTextButton -width 42
+                       -height 28
+                       -image "rampWeightsAdd.svg"
+                       -command ("brRampWeightsPerformAddDeformer \"" + $node + "\"; brRampWeightsGetDeformers;")
+                       -annotation (uiRes("m_brEditRampWeights.kAddDeformer"));
+
+    setParent ..;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsCreateAttributeControls
+//
+// Description:
+//      Create the controls for the ramp weights attributes and connect
+//      them.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCreateAttributeControls( string $node )
+{
+    setParent brRampWeightsAttributesLayout;
+
+    string $form = `formLayout`;
+
+    string $axisLabel = `text -label "Axis" -annotation (uiRes("m_brEditRampWeights.kAxis"))`;
+    string $axis = `optionMenu -annotation (uiRes("m_brEditRampWeights.kAxis"))`;
+        menuItem -label "X" -data 0;
+        menuItem -label "Y" -data 1;
+        menuItem -label "Z" -data 2;
+    string $start = `floatSliderGrp -label "Range Start"
+                                    -field 1
+                                    -minValue -25
+                                    -maxValue 25
+                                    -precision 3
+                                    -columnWidth 2 70
+                                    -columnAttach3 "right" "right" "right"
+                                    -columnOffset3 0 0 0
+                                    -annotation (uiRes("m_brEditRampWeights.kRangeStart"))`;
+    string $end = `floatSliderGrp -label "Range End"
+                                  -field 1
+                                  -minValue -25
+                                  -maxValue 25
+                                  -precision 3
+                                  -columnWidth 2 70
+                                  -columnAttach3 "right" "right" "right"
+                                  -columnOffset3 0 0 0
+                                  -annotation (uiRes("m_brEditRampWeights.kRangeEnd"))`;
+    string $offset = `floatSliderGrp -label "Offset"
+                                     -field 1
+                                     -minValue -25
+                                     -maxValue 25
+                                     -precision 3
+                                     -columnWidth 2 70
+                                     -columnAttach3 "right" "right" "right"
+                                     -columnOffset3 0 0 0
+                                     -annotation (uiRes("m_brEditRampWeights.kOffset"))`;
+    string $mirror = `checkBoxGrp -label "Mirror"
+                                  -columnWidth 2 70
+                                  -columnAttach2 "right" "left"
+                                  -columnOffset2 0 11
+                                  -annotation (uiRes("m_brEditRampWeights.kMirror"))`;
+    string $clamp = `checkBoxGrp -label "Clamp"
+                                 -columnWidth 2 70
+                                 -columnAttach2 "right" "left"
+                                 -columnOffset2 0 11
+                                 -annotation (uiRes("m_brEditRampWeights.kClamp"))`;
+    string $centered = `checkBoxGrp -label "Centered"
+                                    -columnWidth 2 70
+                                    -columnAttach2 "right" "left"
+                                    -columnOffset2 0 11
+                                    -annotation (uiRes("m_brEditRampWeights.kCentered"))`;
+    string $invert = `checkBoxGrp -label "Invert"
+                                  -columnWidth 2 70
+                                  -columnAttach2 "right" "left"
+                                  -columnOffset2 0 11
+                                  -annotation (uiRes("m_brEditRampWeights.kInvert"))`;
+    string $transform = `checkBoxGrp -label "Use Transform"
+                                     -columnWidth 2 70
+                                     -columnAttach2 "right" "left"
+                                     -columnOffset2 0 11
+                                     -annotation (uiRes("m_brEditRampWeights.kUseTransform"))`;
+
+    string $div = `separator -style "in" -horizontal 1`;
+
+    string $presets = `formLayout -width 355`;
+        string $presetsLabel = `text -label "Presets" -align "right"`;
+        string $defaultBtn = `iconTextButton -width 38 -height 38 -image "rampWeightsDefault.svg"`;
+        string $centeredBtn = `iconTextButton -width 38 -height 38 -image "rampWeightsCentered.svg"`;
+        string $mirroredBtn = `iconTextButton -width 38 -height 38 -image "rampWeightsMirrored.svg"`;
+
+    formLayout  -edit
+
+                -attachForm $presetsLabel "left" 0
+                -attachForm $presetsLabel "top" 5
+                -attachForm $defaultBtn "top" 0
+                -attachForm $centeredBtn "top" 0
+                -attachForm $mirroredBtn "top" 0
+
+                -attachControl $defaultBtn "left" 12 $presetsLabel
+                -attachControl $centeredBtn "left" 5 $defaultBtn
+                -attachControl $mirroredBtn "left" 5 $centeredBtn
+
+                -attachPosition $presetsLabel "right" 0 40
+
+                $presets;
+
+    setParent ..;
+
+
+    formLayout  -edit
+
+                -attachForm $axisLabel "top" 5
+                -attachForm $axisLabel "left" 118
+                -attachForm $axis "top" 2
+                -attachForm $start "left" 0
+                -attachForm $start "right" 0
+                -attachForm $end "left" 0
+                -attachForm $end "right" 0
+                -attachForm $offset "left" 0
+                -attachForm $offset "right" 0
+                -attachForm $mirror "left" 0
+                -attachForm $centered "left" 0
+                -attachForm $transform "left" 0
+                -attachForm $div "left" 0
+                -attachForm $div "right" 0
+                -attachForm $presets "left" 0
+
+                -attachControl $axis "left" 10 $axisLabel
+                -attachControl $start "top" 5 $axis
+                -attachControl $end "top" 5 $start
+                -attachControl $offset "top" 5 $end
+                -attachControl $mirror "top" 5 $offset
+                -attachControl $clamp "left" 0 $mirror
+                -attachControl $clamp "top" 5 $offset
+                -attachControl $centered "top" 5 $mirror
+                -attachControl $transform "top" 5 $centered
+                -attachControl $invert "left" 0 $centered
+                -attachControl $invert "top" 5 $clamp
+                -attachControl $div "top" 10 $transform
+                -attachControl $presets "top" 10 $div
+
+                $form;
+
+    setParent ..;
+
+
+    connectControl $axis ($node + ".axis");
+    connectControl $start ($node + ".rangeStart");
+    connectControl $end ($node + ".rangeEnd");
+    connectControl $offset ($node + ".offset");
+    connectControl -index 2 $mirror ($node + ".mirror");
+    connectControl -index 2 $clamp ($node + ".clamp");
+    connectControl -index 2 $centered ($node + ".centered");
+    connectControl -index 2 $invert ($node + ".invert");
+    connectControl -index 2 $transform ($node + ".useTransform");
+
+    checkBoxGrp -edit -changeCommand ("brRampWeightsPerformUseTransform " + $node) $transform;
+
+    iconTextButton -edit
+                   -command ("brRampWeightsApplyPreset \"" + $node + "\" \"default\"")
+                   -annotation (uiRes("m_brEditRampWeights.kPresetDefault"))
+                   $defaultBtn;
+    iconTextButton -edit
+                   -command ("brRampWeightsApplyPreset \"" + $node + "\" \"centered\"")
+                   -annotation (uiRes("m_brEditRampWeights.kPresetCentered"))
+                   $centeredBtn;
+    iconTextButton -edit
+                   -command ("brRampWeightsApplyPreset \"" + $node + "\" \"mirrored\"")
+                   -annotation (uiRes("m_brEditRampWeights.kPresetMirrored"))
+                   $mirroredBtn;
+}
+
+
+// ---------------------------------------------------------------------
+// actions
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brRampWeightsPerformCreate
+//
+// Description:
+//      Create a new ramp weights node either unconnected in case the
+//      current selection is not valid or connect it to the selected
+//      deformer.
+//      Currently only one selection is supported for the initial
+//      creation. Mostly because mixed selections of other deformers
+//      and blend shape nodes would make it impossible to select
+//      certain blend shape channels. This way or another a selection
+//      rule has to be defined and it's easier to just limit to one
+//      selection only than to set up a set of rules.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsPerformCreate()
+{
+    string $deformer;
+    string $createUnconnected = 0;
+
+    string $sel[] = `ls -selection`;
+    // If there is nothing selected create an unconnected node.
+    if (!size($sel))
+        $createUnconnected = 1;
+    else
+    {
+        $deformer = $sel[0];
+        // If the selected node is not a blend shape node or deformer
+        // which doesn't support weights create an unconnected node.
+        if (`nodeType $deformer` != "blendShape" && !`attributeQuery -exists -node $deformer "weightList"`)
+            $createUnconnected = 1;
+        else if (`nodeType $deformer` == "rampWeights")
+            $createUnconnected = 1;
+    }
+
+    string $node;
+    if ($createUnconnected)
+        $node = brRampWeightsCreateNode("", "");
+    else
+    {
+        int $indices[] = {0};
+        string $channels[] = {""};
+        if (`nodeType $deformer` == "blendShape")
+            $indices = brRampWeightsGetBlendShapeTargetIndices($deformer, $channels);
+
+        $node = brRampWeightsCreateNode($deformer, $channels[0]);
+        select -replace $deformer;
+
+        for ($i = 0; $i < size($indices); $i ++)
+            brRampWeightsConnectDeformer($node, $deformer, $indices[$i]);
+    }
+
+    brRampWeightsRefreshUI;
+
+    brRampWeightsSelectOptionByName($node);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsPerformAddDeformer
+//
+// Description:
+//      Add the selected deformer to the ramp weights node. In case of
+//      a blend shape node use the selected channel/s from the channel
+//      box.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsPerformAddDeformer( string $node )
+{
+    if ($node == "")
+        return;
+
+    string $sel[] = `ls -selection`;
+    if (!size($sel))
+        return;
+
+    if ((`nodeType $sel[0]` == "blendShape" || `attributeQuery -exists -node $sel[0] "weightList"`) &&
+        `nodeType $sel[0]` != "rampWeights")
+    {
+        int $indices[];
+        string $channels[];
+        if (`nodeType $sel[0]` == "blendShape")
+        {
+            $indices = brRampWeightsGetBlendShapeTargetIndices($sel[0], $channels);
+            for ($i = 0; $i < size($indices); $i ++)
+                brRampWeightsConnectDeformer($node, $sel[0], $indices[$i]);
+        }
+        else
+        {
+            for ($s in $sel)
+                brRampWeightsConnectDeformer($node, $s, 0);
+        }
+    }
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsRemoveDeformerAtIndex
+//
+// Description:
+//      Disconnect the deformer at the given index and remove the
+//      weights if required.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//      deformer        The name of the deformer to remove.
+//      removeWeights   True, if any controlled weights should be reset.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsRemoveDeformerAtIndex( string $node,
+                                                int $index,
+                                                string $deformer,
+                                                int $removeWeights )
+{
+    string $conn[] = `listConnections -plugs 1
+                                      -connections 1
+                                      ($node + ".weightList[" + $index + "].weights")`;
+    if (size($conn))
+    {
+        // Disconnect the ramp weights node and remove the output
+        // weightList entry.
+        disconnectAttr $conn[0] $conn[1];
+        removeMultiInstance -break 1 ($node + ".weightList[" + $index + "]");
+
+        // If the matrix list also has incoming connections at the
+        // current index because of a connected placement transform
+        // disconnect this as well and also remove the list index.
+        string $matrixConn[] = `listConnections -plugs 1
+                                                -connections 1
+                                                ($node + ".matrixList[" + $index + "]")`;
+        if (size($matrixConn))
+        {
+            disconnectAttr $matrixConn[1] $matrixConn[0];
+            removeMultiInstance -break 1 ($node + ".matrixList[" + $index + "]");
+        }
+
+        // Clear the weights if requested.
+        if ($removeWeights)
+        {
+            if (`nodeType $deformer` == "blendShape")
+            {
+                string $cmd = "import brRampWeights;";
+                $cmd += "brRampWeights.clearWeights(\"" + $conn[1] + "\")";
+                python($cmd);
+            }
+            // In case of a regular deformer only the weight list item
+            // needs to get removed which clears all weights
+            // automatically.
+            else
+                removeMultiInstance -break 1 ($deformer + ".weightList[0]");
+        }
+    }
+
+    // Reselect the ramp weights node to refresh the editor.
+    evalDeferred("brRampWeightsSelectOptionByName \"" + $node + "\"");
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsGetSelectedBlendShapeChannels
+//
+// Description:
+//      Get the names of the selected channels of the blend shape node
+//      from the channel box.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      string[]        The list of selected channel names.
+//
+global proc string[] brRampWeightsGetSelectedBlendShapeChannels()
+{
+    global string $gChannelBoxName;
+
+    string $attr[];
+
+    string $sel[] = `ls -selection`;
+    if (size($sel) == 1 && `nodeType $sel[0]` == "blendShape")
+        $attr = `channelBox -query -selectedMainAttributes $gChannelBoxName`;
+    else
+        $attr = `channelBox -query -selectedHistoryAttributes $gChannelBoxName`;
+
+    return $attr;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsGetBlendShapeTargetIndices
+//
+// Description:
+//      Get the indices and names of the selected channels of the blend
+//      shape node from the channel box.
+//
+// Input Arguments:
+//      bsNode          The blend shape node.
+//      channels[]      The list of selected channel names.
+//
+// Return Value:
+//      int[]           The list of selected channel indices.
+//
+global proc int[] brRampWeightsGetBlendShapeTargetIndices( string $bsNode, string $channels[] )
+{
+    global string $gChannelBoxName;
+
+    int $indices[];
+    clear $channels;
+
+    string $attr[] = brRampWeightsGetSelectedBlendShapeChannels();
+    string $shapes[] = `aliasAttr -query $bsNode`;
+    for ($i = 0; $i < size($shapes); $i ++)
+    {
+        for ($a in $attr)
+        {
+            if ($shapes[$i] == $a)
+            {
+                $indices[size($indices)] = `match "[0-9]+" $shapes[$i + 1]`;
+                $channels[size($channels)] = $shapes[$i];
+                break;
+            }
+        }
+    }
+    return $indices;
+}
+
+
+//
+// Procedure Name:
+//      connectTransform
+//
+// Description:
+//      Connect the placement transform at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      transform       The name of the transform node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+proc connectTransform( string $node, string $transform, int $index )
+{
+    connectAttr ($transform + ".worldMatrix[0]") ($node + ".matrixList[" + $index + "]");
+    brRampWeightsSetTransformButton($node, $index, 1);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsCreateTransform
+//
+// Description:
+//      Create a locator as the placement transform at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCreateTransform( string $node, int $index )
+{
+    string $loc[] = `spaceLocator -name ($node + "_placement_" + $index)`;
+    connectTransform($node, $loc[0], $index);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsConnectSelectedTransform
+//
+// Description:
+//      Connect the selected transform node as the placement transform
+//      at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsConnectSelectedTransform( string $node, int $index )
+{
+    string $sel[] = `ls -selection -transforms`;
+    if (size($sel))
+        connectTransform($node, $sel[0], $index);
+}
+
+
+//
+// Procedure Name:
+//      getTransformName
+//
+// Description:
+//      Return the name of the connected placement transform at the
+//      given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      string          The name of the transform node.
+//
+proc string getTransformName( string $node, int $index )
+{
+    string $conn = `connectionInfo -sourceFromDestination ($node + ".matrixList[" + $index + "]")`;
+    string $items[] = stringToStringArray($conn, ".");
+    return $items[0];
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsSelectTransform
+//
+// Description:
+//      Select the placement transform at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsSelectTransform( string $node, int $index )
+{
+    string $transform = getTransformName($node, $index);
+    select -replace $transform;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsDisconnectTransform
+//
+// Description:
+//      Disconnect the placement transform at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsDisconnectTransform( string $node, int $index )
+{
+    string $conn = `connectionInfo -sourceFromDestination ($node + ".matrixList[" + $index + "]")`;
+    disconnectAttr $conn ($node + ".matrixList[" + $index + "]");
+
+    brRampWeightsSetTransformButton($node, $index, 0);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsDeleteTransform
+//
+// Description:
+//      Delete the placement transform at the given index.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsDeleteTransform( string $node, int $index )
+{
+    string $transform = getTransformName($node, $index);
+    brRampWeightsDisconnectTransform($node, $index);
+    delete $transform;
+    select -replace $node;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsSetTransformButton
+//
+// Description:
+//      Set the image and command for the transform button depending
+//      on whether a placement is connected or not.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      index           The index of the ramp weights node.
+//      state           True, if there is a connected transform.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsSetTransformButton( string $node, int $index, int $state )
+{
+    string $image;
+    string $cmd;
+    int $enabled;
+    if ($state)
+    {
+        $cmd = "brRampWeightsSelectTransform \"" + $node + "\" " + $index;
+        $image = "rampWeightsTransformSelect.svg";
+        $enabled = 1;
+    }
+    else
+    {
+        $cmd = "brRampWeightsCreateTransform \"" + $node + "\" " + $index;
+        $image = "rampWeightsTransformAdd.svg";
+        $enabled = 0;
+    }
+    string $button = "brRampWeightsTransformButton" + $index;
+    iconTextButton -edit -image $image -command $cmd $button;
+    menuItem -edit -enable $enabled ("brRampWeightsDeleteTransformItem" + $index);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsApplyPreset
+//
+// Description:
+//      Apply the given preset name to the ramp weights node.
+//      Since applying a preset through the default Maya way the invert
+//      list array gets cleared along with it. Therefore the current
+//      invert states get stored and re-applied afterwards.
+//
+// Input Arguments:
+//      node            The name of the ramp weights node.
+//      preset          The name of the preset.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsApplyPreset( string $node, string $preset )
+{
+    // Store the individual invert states for each output index.
+    int $indices[] = `getAttr -multiIndices ($node + ".invertList")`;
+    int $invertList[];
+    for ($index in $indices)
+        $invertList[size($invertList)] = `getAttr ($node + ".invertList[" + $index + "]")`;
+
+    string $path = brRampWeightsContentPath();
+    $path += "/presets/attrPresets/rampWeights";
+    applyPresetToNode($node, "", "", $path + "/" + $preset + ".mel", 1);
+
+    // Re-apply the invert states.
+    for ($i = 0; $i < size($indices); $i ++)
+        setAttr ($node + ".invertList[" + $indices[$i] + "]") $invertList[$i];
+}
+
+
+global proc brEditRampWeights()
+{
+    int $status = brRampWeightsLoadPlugin();
+
+    brRampWeightsEditUI;
+
+    if (!$status)
+    {
+        displayPluginError;
+        return;
+    }
+
+    attachUpdateScript;
+
+    string $node = getNodeFromSelection();
+    if ($node != "")
+        brRampWeightsSelectOptionByName($node);
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights is under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

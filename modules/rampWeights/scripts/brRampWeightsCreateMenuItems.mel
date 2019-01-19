@@ -1,0 +1,255 @@
+// ---------------------------------------------------------------------
+// brRampWeightsCreateMenuItems.mel
+//
+// Creates menu items for the ramp weights node in the default Maya
+// deform menu.
+//
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brRampWeightsDeleteMenuItems
+//
+// Description:
+//      Delete the menu items which are associated with the ramp weights
+//      node.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsDeleteMenuItems()
+{
+    deleteUI brWeightsControllerMenuDivider;
+    deleteUI brRampWeightsEditorMenuItem;
+}
+
+
+//
+// Procedure Name:
+//      mayaVersion
+//
+// Description:
+//      Get the current Maya version.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      float           The Maya version.
+//
+proc float mayaVersion()
+{
+    float $version = `about -apiVersion`;
+    string $versionString = $version;
+    float $div = pow(10.0, (size($versionString) - 4));
+    $version /= $div;
+    int $versionInt = $version * 10;
+    $version = $versionInt / 10.0;
+    return $version;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsContentPath
+//
+// Description:
+//      Get the content path of the module which has been collected
+//      during setup.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      string          The content path.
+//
+global proc string brRampWeightsContentPath()
+{
+    return `optionVar -q "brRampWeightsContentPath"`;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsLoadPlugin
+//
+// Description:
+//      Load the ramp weights plugin based on the module path, the
+//      operating system and the Maya version.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc int brRampWeightsLoadPlugin()
+{
+    if (`pluginInfo -query -loaded "rampWeights"`)
+    {
+        string $version = `pluginInfo -query -version "rampWeights"`;
+        string $items[] = stringToStringArray($version, ".");
+        int $major = $items[0];
+        if ($major < 3)
+            return 0;
+    }
+
+    string $pluginPath = brRampWeightsContentPath();
+    $pluginPath += "/plug-ins";
+    string $os = `about -os`;
+    string $ext;
+    if ($os == "mac")
+    {
+        $os += "OS";
+        $ext = ".bundle";
+    }
+    else if ($os == "linux64")
+        $ext = ".so";
+    else if ($os == "win64")
+        $ext = ".mll";
+    $pluginPath += "/" + $os + "/" + mayaVersion() + "/rampWeights" + $ext;
+
+    if (!`pluginInfo -query -loaded $pluginPath`)
+        loadPlugin $pluginPath;
+
+    return 1;
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsAddMenuCommand
+//
+// Description:
+//      Add the command to create the necessary menu iitems for the
+//      ramp weights node to the post menu command which is attached
+//      to the various deformer menus.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsAddMenuCommand()
+{
+    global string $gAnimationMenus[];
+
+    string $cmd;
+
+    float $version = `mayaVersion`;
+    if ($version > 2015)
+    {
+        global string $gNewModelingMenus[];
+        global string $gRiggingMenus[];
+
+        $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
+        $cmd += "; brRampWeightsCreateMenuItems " + $gAnimationMenus[3] + " 1;";
+        $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
+
+        $cmd = `menu -query -postMenuCommand $gNewModelingMenus[6]`;
+        $cmd += "; brRampWeightsCreateMenuItems " + $gNewModelingMenus[6] + " 2;";
+        $gNewModelingMenus[6] = `menu -e -pmc $cmd $gNewModelingMenus[6]`;
+
+        $cmd = `menu -query -postMenuCommand $gRiggingMenus[2]`;
+        $cmd += "; brRampWeightsCreateMenuItems " + $gRiggingMenus[2] + " 3;";
+        $gRiggingMenus[2] = `menu -e -pmc $cmd $gRiggingMenus[2]`;
+    }
+    else
+    {
+        $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
+        $cmd += "; brRampWeightsCreateMenuItems " + $gAnimationMenus[3] + " 1;";
+        $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
+
+    }
+}
+
+
+//
+// Procedure Name:
+//      addMenuItems
+//
+// Description:
+//      Add the ramp weights menu items.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+proc addMenuItems( int $menuIndex )
+{
+    string $ann = "Control deformer weights";
+
+    menuItem -label "Edit Ramp Weights"
+             -annotation $ann
+             -image "brSmoothWeights.svg"
+             -command "brEditRampWeights"
+             ("brRampWeightsEditorMenuItem" + $menuIndex);
+}
+
+
+//
+// Procedure Name:
+//      brRampWeightsCreateMenuItems
+//
+// Description:
+//      Load the ramp weights plugin and add the menu items.
+//      This procedure gets called when opening one of the deformer
+//      menus.
+//
+// Input Arguments:
+//      parent          The name of the parent menu.
+//
+// Return Value:
+//      None
+//
+global proc brRampWeightsCreateMenuItems( string $parent, int $menuIndex )
+{
+    int $status = brRampWeightsLoadPlugin();
+
+    if (`menuItem -query -exists ("brWeightsControllerMenuDivider" + $menuIndex)`)
+        return;
+
+    int $version = `mayaVersion`;
+
+    setParent -menu $parent;
+    string $div = "";
+    if ($version >= 2015)
+        $div = "-dividerLabel \"Weights Controller\" ";
+    eval("menuItem -divider 1 " + $div + "brWeightsControllerMenuDivider" + $menuIndex);
+
+    addMenuItems($menuIndex);
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights is under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

@@ -1,0 +1,11 @@
++ MAYAVERSION:2016.5 rampWeights any /home/USERNAME/maya/modules/rampWeights
+plug-ins: plug-ins/linux64/2016.5
+
++ MAYAVERSION:2017 rampWeights any /home/USERNAME/maya/modules/rampWeights
+plug-ins: plug-ins/linux64/2017
+
++ MAYAVERSION:2018 rampWeights any /home/USERNAME/maya/modules/rampWeights
+plug-ins: plug-ins/linux64/2018
+
++ MAYAVERSION:2019 rampWeights any /home/USERNAME/maya/modules/rampWeights
+plug-ins: plug-ins/linux64/2019
