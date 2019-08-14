@@ -9,7 +9,7 @@ Originally the plug-ins were part of the blend shape editor [SHAPES](http://www.
 [weightsServer on Vimeo](https://vimeo.com/256378129)
 
 ## Installation
-Installation is easy with the supplied installer.
+Installation is easy with the included installer.
 
 [Easy Install](https://github.com/IngoClemens/rampWeights/wiki/Installation)
 
