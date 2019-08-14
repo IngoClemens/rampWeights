@@ -1,31 +1,10 @@
 // ---------------------------------------------------------------------
-// brRampWeightsCreateMenuItems.mel
+// brWeightsControllerCreateMenuItems.mel
 //
-// Creates menu items for the ramp weights node in the default Maya
-// deform menu.
+// Creates menu items for the weights controller nodes in the default
+// Maya deform menu.
 //
 // ---------------------------------------------------------------------
-
-//
-// Procedure Name:
-//      brRampWeightsDeleteMenuItems
-//
-// Description:
-//      Delete the menu items which are associated with the ramp weights
-//      node.
-//
-// Input Arguments:
-//      None
-//
-// Return Value:
-//      None
-//
-global proc brRampWeightsDeleteMenuItems()
-{
-    deleteUI brWeightsControllerMenuDivider;
-    deleteUI brRampWeightsEditorMenuItem;
-}
-
 
 //
 // Procedure Name:
@@ -54,7 +33,7 @@ proc float mayaVersion()
 
 //
 // Procedure Name:
-//      brRampWeightsContentPath
+//      brWeightsControllerContentPath
 //
 // Description:
 //      Get the content path of the module which has been collected
@@ -66,54 +45,62 @@ proc float mayaVersion()
 // Return Value:
 //      string          The content path.
 //
-global proc string brRampWeightsContentPath()
+global proc string brWeightsControllerContentPath()
 {
-    return `optionVar -q "brRampWeightsContentPath"`;
+    return `optionVar -query "brWeightsControllerContentPath"`;
 }
 
 
 //
 // Procedure Name:
-//      brRampWeightsLoadPlugin
+//      brWeightsControllerLoadPlugin
 //
 // Description:
-//      Load the ramp weights plugin based on the module path, the
+//      Load the weights controller plugin based on the module path, the
 //      operating system and the Maya version.
 //
 // Input Arguments:
-//      None
+//      type            The node type.
 //
 // Return Value:
-//      None
+//      int             True, if the plug-in with a compatible version
+//                      is loaded.
 //
-global proc int brRampWeightsLoadPlugin()
+global proc int brWeightsControllerLoadPlugin( string $type )
 {
-    if (`pluginInfo -query -loaded "rampWeights"`)
+    string $version;
+
+    if (`pluginInfo -query -loaded $type`)
     {
-        string $version = `pluginInfo -query -version "rampWeights"`;
+        string $version = `pluginInfo -query -version $type`;
         string $items[] = stringToStringArray($version, ".");
         int $major = $items[0];
-        if ($major < 3)
+        if ($major < 4)
             return 0;
     }
-
-    string $pluginPath = brRampWeightsContentPath();
-    $pluginPath += "/plug-ins";
-    string $os = `about -os`;
-    string $ext;
-    if ($os == "mac")
+    else
     {
-        $os += "OS";
-        $ext = ".bundle";
-    }
-    else if ($os == "linux64")
-        $ext = ".so";
-    else if ($os == "win64")
-        $ext = ".mll";
-    $pluginPath += "/" + $os + "/" + mayaVersion() + "/rampWeights" + $ext;
+        string $pluginPath = brWeightsControllerContentPath() + "/plug-ins";
+        string $os = `about -os`;
+        string $ext;
+        if ($os == "mac")
+        {
+            $os += "OS";
+            $ext = ".bundle";
+        }
+        else if ($os == "linux64")
+            $ext = ".so";
+        else if ($os == "win64")
+            $ext = ".mll";
+        $pluginPath += "/" + $os + "/" + mayaVersion() + "/" + $type + $ext;
 
-    if (!`pluginInfo -query -loaded $pluginPath`)
         loadPlugin $pluginPath;
+
+        $pluginPath = `pluginInfo -query -path $type`;
+        $version = `pluginInfo -query -version $type`;
+        string $msg = $type + " " + $version + " loaded from " + $pluginPath;
+        brWeightsControllerLog($msg);
+    }
 
     return 1;
 }
@@ -121,11 +108,11 @@ global proc int brRampWeightsLoadPlugin()
 
 //
 // Procedure Name:
-//      brRampWeightsAddMenuCommand
+//      brWeightsControllerAddMenuCommand
 //
 // Description:
-//      Add the command to create the necessary menu iitems for the
-//      ramp weights node to the post menu command which is attached
+//      Add the command to create the necessary menu items for the
+//      weights server node to the post menu command which is attached
 //      to the various deformer menus.
 //
 // Input Arguments:
@@ -134,7 +121,7 @@ global proc int brRampWeightsLoadPlugin()
 // Return Value:
 //      None
 //
-global proc brRampWeightsAddMenuCommand()
+global proc brWeightsControllerAddMenuCommand()
 {
     global string $gAnimationMenus[];
 
@@ -147,21 +134,21 @@ global proc brRampWeightsAddMenuCommand()
         global string $gRiggingMenus[];
 
         $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
-        $cmd += "; brRampWeightsCreateMenuItems " + $gAnimationMenus[3] + " 1;";
+        $cmd += "; brWeightsControllerCreateMenuItems " + $gAnimationMenus[3] + " 1;";
         $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
 
         $cmd = `menu -query -postMenuCommand $gNewModelingMenus[6]`;
-        $cmd += "; brRampWeightsCreateMenuItems " + $gNewModelingMenus[6] + " 2;";
+        $cmd += "; brWeightsControllerCreateMenuItems " + $gNewModelingMenus[6] + " 2;";
         $gNewModelingMenus[6] = `menu -e -pmc $cmd $gNewModelingMenus[6]`;
 
         $cmd = `menu -query -postMenuCommand $gRiggingMenus[2]`;
-        $cmd += "; brRampWeightsCreateMenuItems " + $gRiggingMenus[2] + " 3;";
+        $cmd += "; brWeightsControllerCreateMenuItems " + $gRiggingMenus[2] + " 3;";
         $gRiggingMenus[2] = `menu -e -pmc $cmd $gRiggingMenus[2]`;
     }
     else
     {
         $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
-        $cmd += "; brRampWeightsCreateMenuItems " + $gAnimationMenus[3] + " 1;";
+        $cmd += "; brWeightsControllerCreateMenuItems " + $gAnimationMenus[3] + " 1;";
         $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
 
     }
@@ -173,7 +160,7 @@ global proc brRampWeightsAddMenuCommand()
 //      addMenuItems
 //
 // Description:
-//      Add the ramp weights menu items.
+//      Add the weights server menu items.
 //
 // Input Arguments:
 //      None
@@ -187,18 +174,24 @@ proc addMenuItems( int $menuIndex )
 
     menuItem -label "Edit Ramp Weights"
              -annotation $ann
-             -image "brSmoothWeights.svg"
-             -command "brEditRampWeights"
+             -image "rampWeights.svg"
+             -command "brEditWeightsController rampWeights"
              ("brRampWeightsEditorMenuItem" + $menuIndex);
+
+    menuItem -label "Edit Weights Server"
+             -annotation $ann
+             -image "weightsServer.svg"
+             -command "brEditWeightsController weightsServer"
+             ("brWeightsServerEditorMenuItem" + $menuIndex);
 }
 
 
 //
 // Procedure Name:
-//      brRampWeightsCreateMenuItems
+//      brWeightsControllerCreateMenuItems
 //
 // Description:
-//      Load the ramp weights plugin and add the menu items.
+//      Load the weights server plugin and add the menu items.
 //      This procedure gets called when opening one of the deformer
 //      menus.
 //
@@ -208,9 +201,11 @@ proc addMenuItems( int $menuIndex )
 // Return Value:
 //      None
 //
-global proc brRampWeightsCreateMenuItems( string $parent, int $menuIndex )
+global proc brWeightsControllerCreateMenuItems( string $parent, int $menuIndex )
 {
-    int $status = brRampWeightsLoadPlugin();
+    source brWeightsControllerCommon;
+    source brEditRampWeights;
+    source brEditWeightsServer;
 
     if (`menuItem -query -exists ("brWeightsControllerMenuDivider" + $menuIndex)`)
         return;
@@ -218,6 +213,7 @@ global proc brRampWeightsCreateMenuItems( string $parent, int $menuIndex )
     int $version = `mayaVersion`;
 
     setParent -menu $parent;
+
     string $div = "";
     if ($version >= 2015)
         $div = "-dividerLabel \"Weights Controller\" ";
@@ -230,7 +226,7 @@ global proc brRampWeightsCreateMenuItems( string $parent, int $menuIndex )
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// rampWeights and weightsServer are under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the

@@ -1,0 +1,456 @@
+//
+// Procedure Name:
+//      brWeightsServerCreateAttributeControls
+//
+// Description:
+//      Create the controls for the weights server attributes and
+//      connect them.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerCreateAttributeControls( string $node )
+{
+    setParent brWeightsServerAttributesLayout;
+
+    string $form = `formLayout`;
+
+    string $radius = `floatSliderGrp -label "Global Radius"
+                                     -field 1
+                                     -minValue 0
+                                     -maxValue 50
+                                     -precision 3
+                                     -columnWidth 2 70
+                                     -columnAttach3 "right" "right" "right"
+                                     -columnOffset3 0 0 0
+                                     -annotation (uiRes("m_brEditWeightsServer.kGlobalRadius"))`;
+    string $scale = `floatSliderGrp -label "Global Scale"
+                                    -field 1
+                                    -minValue 0
+                                    -maxValue 1
+                                    -precision 3
+                                    -columnWidth 2 70
+                                    -columnAttach3 "right" "right" "right"
+                                    -columnOffset3 0 0 0
+                                    -annotation (uiRes("m_brEditWeightsServer.kGlobalScale"))`;
+    string $inflScale = `floatSliderGrp -label "Global Influence Scale"
+                                        -field 1
+                                        -minValue 0
+                                        -maxValue 1
+                                        -precision 3
+                                        -columnWidth 2 70
+                                        -columnAttach3 "right" "right" "right"
+                                        -columnOffset3 0 0 0
+                                        -annotation (uiRes("m_brEditWeightsServer.kGlobalInfluenceScale"))`;
+    string $invert = `checkBoxGrp -label "Invert"
+                                  -columnWidth 2 70
+                                  -columnAttach2 "right" "left"
+                                  -columnOffset2 0 11
+                                  -annotation (uiRes("m_brEditWeightsServer.kInvert"))`;
+
+
+    formLayout  -edit
+
+                -attachForm $radius "top" 0
+                -attachForm $radius "left" 0
+                -attachForm $radius "right" 0
+                -attachForm $scale "left" 0
+                -attachForm $scale "right" 0
+                -attachForm $inflScale "left" 0
+                -attachForm $inflScale "right" 0
+                -attachForm $invert "left" 0
+
+                -attachControl $scale "top" 5 $radius
+                -attachControl $inflScale "top" 5 $scale
+                -attachControl $invert "top" 5 $inflScale
+
+                $form;
+
+    setParent ..;
+
+
+    connectControl $radius ($node + ".globalRadius");
+    connectControl $scale ($node + ".globalScale");
+    connectControl $inflScale ($node + ".globalInfluenceScale");
+    connectControl -index 2 $invert ($node + ".invert");
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerGetInfluences
+//
+// Description:
+//      Get all influences of the selected node and generate the list
+//      items.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerGetInfluences()
+{
+    brWeightsControllerRemoveChildItems "brWeightsServerInfluencesLayout";
+
+    string $node = brWeightsControllerGetSelectedNodeOption("weightsServer");
+    if ($node == "")
+        return;
+
+    int $indices[] = `getAttr -multiIndices ($node + ".influence")`;
+    for ($index in $indices)
+        brWeightsServerCreateInfluenceItem($node, $index);
+
+    brWeightsServerCreateAddInfluenceButton($node);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerCreateInfluenceItem
+//
+// Description:
+//      Create the list item for the influence at the given index.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//      index           The index of the influence.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerCreateInfluenceItem( string $node, int $index )
+{
+    string $conn[] = `listConnections -source 1
+                                      -destination 0
+                                      ($node + ".influence[" + $index + "].matrix")`;
+    if (!size($conn))
+        return;
+
+    string $influence = $conn[0];
+
+    // -----------------------------------------------------------------
+    // Create the list item.
+    // -----------------------------------------------------------------
+    setParent brWeightsServerInfluencesLayout;
+
+    string $form = `formLayout`;
+
+    // -----------------------------------------------------------------
+    // influence information
+    // -----------------------------------------------------------------
+    string $active = `checkBox -label "" -annotation (uiRes("m_brEditWeightsServer.kInfluenceActive"))`;
+
+    string $indexText = `text -label ($index + ":") -align "left" -font "boldLabelFont"`;
+
+    string $nameField = `textField -text $influence
+                                   -annotation (uiRes("m_brEditWeightsServer.kInfluenceName"))`;
+    popupMenu;
+        string $selectItem = `menuItem -label "Select" -command ("select -replace " + $influence)`;
+
+    string $radiusLabel = `text -label "Radius"
+                                -align "left"
+                                -annotation (uiRes("m_brEditWeightsServer.kInfluenceRadius"))`;
+    string $radiusField = `floatField -precision 3
+                                      -width 65
+                                      -annotation (uiRes("m_brEditWeightsServer.kInfluenceRadius"))`;
+    string $scaleLabel = `text -label "Scale" -align "left"`;
+    string $scaleField = `floatField -precision 3
+                                     -width 65
+                                     -annotation (uiRes("m_brEditWeightsServer.kInfluenceScale"))`;
+
+    string $world = `symbolCheckBox -width 26
+                                    -height 26
+                                    -onImage "weightsServerUseWorldSpaceOn.svg"
+                                    -offImage "weightsServerUseWorldSpaceOff.svg"
+                                    -annotation (uiRes("m_brEditWeightsServer.kInfluenceWorldSpace"))`;
+    string $useShape = `symbolCheckBox -width 26
+                                       -height 26
+                                       -annotation (uiRes("m_brEditWeightsServer.kInfluenceUseShape"))`;
+    string $updateBtn = `iconTextButton -style "iconOnly"
+                                        -image "weightsServerSetInfluenceRest.svg"
+                                        -command ("brWeightsServerSetInfluenceRest " + $influence)
+                                        -annotation (uiRes("m_brEditWeightsServer.kInfluenceSetRest"))`;
+    string $btnCmd = "brWeightsServerRemoveInfluenceAtIndex " + $node + " " + $index + "; brWeightsServerGetInfluences;";
+    string $delete = `iconTextButton -style "iconOnly"
+                                     -image "weightsControllerDisconnect.svg"
+                                     -command $btnCmd
+                                     -annotation (uiRes("m_brEditWeightsServer.kInfluenceRemove"))`;
+
+    // -----------------------------------------------------------------
+    // layout
+    // -----------------------------------------------------------------
+    string $div = `separator -style "in" -horizontal 1`;
+
+    formLayout  -edit
+
+                -attachForm $active "left" 0
+                -attachForm $active "top" 10
+                -attachForm $indexText "top" 10
+                -attachForm $delete "top" 4
+                -attachForm $delete "right" 0
+                -attachForm $nameField "top" 7
+                -attachForm $radiusLabel "top" 10
+                -attachForm $radiusField "top" 7
+                -attachForm $scaleLabel "top" 10
+                -attachForm $scaleField "top" 7
+                -attachForm $world "top" 4
+                -attachForm $useShape "top" 4
+                -attachForm $updateBtn "top" 4
+                -attachForm $div "left" 0
+                -attachForm $div "right" 0
+
+                -attachControl $indexText "left" 10 $active
+                -attachControl $nameField "left" 10 $indexText
+                -attachControl $nameField "right" 15 $radiusLabel
+                -attachControl $radiusLabel "right" 5 $radiusField
+                -attachControl $radiusField "right" 15 $scaleLabel
+                -attachControl $scaleLabel "right" 5 $scaleField
+                -attachControl $scaleField "right" 10 $world
+                -attachControl $world "right" 5 $useShape
+                -attachControl $useShape "right" 5 $updateBtn
+                -attachControl $updateBtn "right" 5 $delete
+                -attachControl $div "top" 5 $delete
+
+                $form;
+
+    setParent ..;
+
+
+    connectControl $radiusField ($node + ".influence[" + $index + "].radius");
+    connectControl $scaleField ($node + ".influence[" + $index + "].scale");
+    connectControl $active ($node + ".influence[" + $index + "].active");
+    connectControl $world ($node + ".influence[" + $index + "].worldSpace");
+    connectControl $useShape ($node + ".influence[" + $index + "].useShape");
+
+    brWeightsServerSetShapeButtonImage($node, $index, $useShape);
+
+    string $cmd = "brWeightsServerRenameInfluence " + $nameField + " " + $influence + " " + $selectItem;
+    textField -edit -changeCommand $cmd -enterCommand $cmd $nameField;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerCreateAddInfluenceButton
+//
+// Description:
+//      Create the button for adding one or more influences to the
+//      weights server node.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerCreateAddInfluenceButton( string $node )
+{
+    setParent brWeightsServerInfluencesLayout;
+
+    columnLayout;
+        separator -style "none" -height 10;
+        iconTextButton -width 42
+                       -height 28
+                       -image "weightsServerAddInfluence.svg"
+                       -command ("brWeightsServerAddInfluence \"" + $node + "\"; brWeightsServerGetInfluences;")
+                       -annotation (uiRes("m_brEditWeightsServer.kAddInfluence"));
+
+    setParent ..;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerRenameInfluence
+//
+// Description:
+//      Rename the influence when editing it's name in the field.
+//
+// Input Arguments:
+//      nameField       The name of the influence name field.
+//      oldName         The previous name of the influence.
+//      menuItem        The menu item to select the influence.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerRenameInfluence( string $nameField, string $oldName, string $menuItem )
+{
+    string $newName = `textField -query -text $nameField`;
+    $newName = `rename $oldName $newName`;
+
+    string $cmd = "brWeightsServerRenameInfluence " + $nameField + " " + $newName + " " + $menuItem;
+    textField -edit -text $newName -changeCommand $cmd -enterCommand $cmd $nameField;
+
+    menuItem -edit -command ("select -replace " + $newName) $menuItem;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerAddInfluence
+//
+// Description:
+//      Add the selected nodes as influences to the given weights server
+//      node.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerAddInfluence( string $node )
+{
+    if ($node == "")
+        return;
+
+    string $sel[] = `ls -selection`;
+    if (!size($sel))
+        return;
+
+    for ($s in $sel)
+        brWeightsServerConnectInfluence($node, $s, {}, 0);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerRemoveInfluenceAtIndex
+//
+// Description:
+//      Disconnect the influence at the given index and remove the
+//      influence data.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//      index           The index of the influence.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerRemoveInfluenceAtIndex( string $node, int $index )
+{
+    string $conn = `connectionInfo -sourceFromDestination
+                                   ($node + ".influence[" + $index + "].matrix")`;
+    brWeightsControllerDisconnectAttr($conn, ($node + ".influence[" + $index + "].matrix"));
+    removeMultiInstance -break 1 ($node + ".influence[" + $index + "]");
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerSetInfluenceRest
+//
+// Description:
+//      Set the current influence position as the rest position.
+//
+// Input Arguments:
+//      influence       The name of the influence node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerSetInfluenceRest( string $influence )
+{
+    string $conn[] = `listConnections -source 0
+                                      -destination 1
+                                      -plugs 1
+                                      -type "weightsServer"
+                                      ($influence + ".worldMatrix[0]")`;
+    if (size($conn))
+    {
+        string $items[] = stringToStringArray($conn[0], ".");
+        $items[size($items) - 1] = "restParentMatrix";
+        string $attr = stringArrayToString($items, ".");
+        connectAttr -force ($influence + ".parentMatrix[0]") $attr;
+        refresh;
+        disconnectAttr ($influence + ".parentMatrix[0]") $attr;
+
+        string $msg = "Set influence rest for " + $attr;
+        brWeightsControllerLog($msg);
+    }
+}
+
+
+//
+// Procedure Name:
+//      brWeightsServerSetShapeButtonImage
+//
+// Description:
+//      Set the image for the useShape button of the influence depending
+//      on the geometry type of the influence.
+//
+// Input Arguments:
+//      node            The name of the weights server node.
+//      index           The index of the influence.
+//      control         The name of the symbolCheckBox control.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerSetShapeButtonImage( string $node, int $index, string $control )
+{
+    string $type = "Transform";
+    string $enable = 0;
+
+    string $conn[] = `listConnections -source 1
+                                      -destination 0
+                                      ($node + ".influence[" + $index + "].matrix")`;
+    if (size($conn))
+    {
+        string $shape[] = `listRelatives -shapes $conn[0]`;
+        if (size($shape))
+        {
+            if (`nodeType $shape[0]` == "mesh")
+            {
+                $type = "Mesh";
+                $enable = 1;
+            }
+            else if (`nodeType $shape[0]` == "nurbsCurve")
+            {
+                $type = "Curve";
+                $enable = 1;
+            }
+        }
+    }
+
+    string $cmd = ("symbolCheckBox -edit -enable " + $enable + " " +
+                   "-onImage \"weightsServerUse" + $type + "On.svg\" " +
+                   "-offImage \"weightsServerUse" + $type + "Off.svg\" " +
+                   $control);
+    eval($cmd);
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights and weightsServer are under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

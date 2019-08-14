@@ -3,11 +3,11 @@
 //      getNextIndex
 //
 // Description:
-//      Return the next available weight list index of the ramp weights
-//      node which is not used or connected.
+//      Return the next available weight list index of the weights
+//      server node which is not used or connected.
 //
 // Input Arguments:
-//      node            The name of the ramp weights node.
+//      node            The name of the weights controller node.
 //
 // Return Value:
 //      int             The next available weight list index.
@@ -17,7 +17,7 @@ proc int getNextIndex( string $node )
     int $index = -1;
 
     string $attr = $node + ".weightList";
-    int $ids[] = `getAttr -mi $attr`;
+    int $ids[] = `getAttr -multiIndices $attr`;
     for ($i = 0; $i < size($ids); $i ++)
     {
         if ($index == -1)
@@ -39,20 +39,21 @@ proc int getNextIndex( string $node )
 
 //
 // Procedure Name:
-//      brRampWeightsConnectDeformer
+//      brWeightsControllerConnectDeformer
 //
 // Description:
-//      Swap the order of the selected collider meshes.
+//      Connect the given deformer with the weights controller node.
 //
 // Input Arguments:
-//      node            The name of the ramp weights node.
+//      node            The name of the weights controller node.
 //      deformer        The name of the deformer to be controlled.
 //      index           The index of the blend shape target if any.
 //
 // Return Value:
-//      None
+//      int             The weight list index the deformer is connected
+//                      to.
 //
-global proc brRampWeightsConnectDeformer( string $node, string $deformer, int $index )
+global proc int brWeightsControllerConnectDeformer( string $node, string $deformer, int $index )
 {
     int $nextIndex = getNextIndex($node);
     string $srcAttr = $node + ".weightList[" + $nextIndex + "].weights";
@@ -61,17 +62,16 @@ global proc brRampWeightsConnectDeformer( string $node, string $deformer, int $i
     if (`nodeType $deformer` == "blendShape")
         $destAttr = $deformer + ".inputTarget[0].inputTargetGroup[" + $index + "].targetWeights";
 
-    connectAttr -force $srcAttr $destAttr;
+    brWeightsControllerConnectAttr($srcAttr, $destAttr);
 
-    if (`getAttr ($node + ".useTransform")`)
-        brRampWeightsConnectDeformedTransform($node, $deformer);
+    return $nextIndex;
 }
 
 // ---------------------------------------------------------------------
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// rampWeights and weightsServer are under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the

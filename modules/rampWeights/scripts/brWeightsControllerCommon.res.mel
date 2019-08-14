@@ -1,0 +1,97 @@
+// ---------------------------------------------------------------------
+// brWeightsControllerCommon.res.mel
+// ---------------------------------------------------------------------
+
+displayString -replace
+              -value "Add the selected deformer or blend shape target channel from the channel box."
+              m_brWeightsControllerCommon.kAddDeformer;
+
+displayString -replace
+              -value "Invert the weights for this channel."
+              m_brWeightsControllerCommon.kChannelInvert;
+
+displayString -replace
+              -value ("Create a new node for the selected deformer or blend shape target or " +
+                      "create a node without connections.")
+              m_brWeightsControllerCommon.kCreate;
+
+displayString -replace
+              -value "Disconnect the weights controller node from the deformer and reset the weights."
+              m_brWeightsControllerCommon.kDisconnect;
+
+displayString -replace
+              -value "Disconnect the weights controller node from the deformer and keep the weights."
+              m_brWeightsControllerCommon.kDisconnectKeep;
+
+displayString -replace
+              -value "Select the node to edit. RMB to select or delete the selected node."
+              m_brWeightsControllerCommon.kNodeOption;
+
+displayString -replace
+              -value ("Switch between the editor for the ramp weights or weights server node. " +
+                      "Double-click to open in a new window.")
+              m_brWeightsControllerCommon.kToggleNode;
+
+displayString -replace
+              -value ("Activate to update when the selection changes. Turn off to keep the " +
+                      "current node in the editor.")
+              m_brWeightsControllerCommon.kUpdate;
+
+displayString -replace
+              -value ("Transfer the list of affected components when these have changed on the deformer.")
+              m_brWeightsControllerCommon.kUpdateComponents;
+
+displayString -replace
+              -value ("The controller channel needs updating. RMB and choose Update Node.")
+              m_brWeightsControllerCommon.kUpdateNodeInfo;
+
+
+displayString -replace
+              -value ("The currently loaded version of the weights controller plug-in is not " +
+                      "compatible with the editor.\n" +
+                      "Unload the currently loaded plug-in and then proceed by re-opening " +
+                      "the editor.\n" +
+                      "The correct plug-in will then be loaded automatically.\n" +
+                      "It is recommended to remove the old version of the weights controller " +
+                      "plug-in from the preferences.\n\n" +
+                      "The conflicting plug-in is located at:")
+              m_brWeightsControllerCommon.kVersionWarning1;
+
+displayString -replace
+              -value ("Do you want to try to unload the conflicting plug-in automatically?\n" +
+                      "Note: This also deletes the undo queue.\n")
+              m_brWeightsControllerCommon.kVersionWarning2;
+
+displayString -replace
+              -value ("If the plug-in cannot be unloaded automatically it's either still in use " +
+                      "or there are still related\nundo operations. " +
+                      "In this case try open a new scene or restart Maya.\n")
+              m_brWeightsControllerCommon.kVersionWarning3;
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights and weightsServer are under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

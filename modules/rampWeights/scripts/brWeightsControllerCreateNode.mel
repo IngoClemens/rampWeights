@@ -1,43 +1,38 @@
 //
 // Procedure Name:
-//      brRampWeightsCreateFromSelection
+//      brWeightsControllerCreateNode
 //
 // Description:
-//      Create a new ramp weights node and connect it to the selected
-//      deformers.
+//      Create a new weights controller node and return it's name.
 //
 // Input Arguments:
-//      index           The index of the blend shape target if any.
+//      deformer        The name of the deformer node.
+//      name            The name for the new weights controller node.
+//      type            The node type.
 //
 // Return Value:
-//      None
+//      string          The name of the weights controller node.
 //
-global proc brRampWeightsCreateFromSelection( int $index )
+global proc string brWeightsControllerCreateNode( string $deformer, string $channel, string $type )
 {
-    string $sel[] = `ls -selection`;
-    if (!size($sel))
-    {
-        warning "Select one or more deformers to be controlled.";
-        return;
-    }
+    string $node = `createNode $type`;
 
-    for ($s in $sel)
-    {
-        if (`nodeType $s` == "blendShape" || `attributeQuery -exists -node $s "weightList"`)
-        {
-            string $node = brRampWeightsCreateNode($s, "");
-            brRampWeightsConnectDeformer($node, $s, $index);
-        }
-        else
-            warning ($s + " is not a deformer or not supported.");
-    }
+    string $nodeName;
+    if ($deformer != "")
+        $nodeName = $deformer + "_";
+    if ($channel != "")
+        $nodeName += $channel + "_";
+    if ($nodeName != "")
+        $node = `rename $node ($nodeName + $type)`;
+
+    return $node;
 }
 
 // ---------------------------------------------------------------------
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// rampWeights and weightsServer are under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the

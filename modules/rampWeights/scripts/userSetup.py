@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------
 # userSetup.mel
 #
-# Automatically add the menu items for the ramp weights node upon Maya
-# startup.
+# Automatically add the menu items for the weights controller nodes upon
+# Maya startup.
 #
 # ----------------------------------------------------------------------
 
@@ -12,14 +12,12 @@ import inspect, os
 
 def addMenuItems():
     if not cmds.about(batch=True):
-        mel.eval("source brRampWeightsCreateMenuItems; brRampWeightsAddMenuCommand;")
+        mel.eval("source brWeightsControllerCreateMenuItems; brWeightsControllerAddMenuCommand;")
         # Get the path of this setup file and store the parent path
         # as the module's content path. This is needed to get access
         # to the preset files and the plug-in path.
         scripts = os.path.dirname(os.path.realpath(inspect.getfile(inspect.currentframe())))
 
-        # In case of windows it's important that no string literals are
-        # contained in the path, since 'rampWeights' already causes one.
         scripts = scripts.replace("\a", "/a")
         scripts = scripts.replace("\b", "/b")
         scripts = scripts.replace("\f", "/f")
@@ -29,7 +27,7 @@ def addMenuItems():
         scripts = scripts.replace("\v", "v/")
         scripts = scripts.replace("\\", "/")
 
-        mel.eval("optionVar -stringValue \"brRampWeightsContentPath\" \"{}\";".format(os.path.dirname(scripts)))
+        mel.eval("optionVar -stringValue \"brWeightsControllerContentPath\" \"{}\";".format(os.path.dirname(scripts)))
 
 utils.executeDeferred(addMenuItems)
 
@@ -37,7 +35,7 @@ utils.executeDeferred(addMenuItems)
 # MIT License
 #
 # Copyright (c) 2019 Ingo Clemens, brave rabbit
-# rampWeights is under the terms of the MIT License
+# rampWeights and weightsServer are under the terms of the MIT License
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the

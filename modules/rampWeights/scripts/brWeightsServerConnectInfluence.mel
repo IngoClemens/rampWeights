@@ -1,0 +1,140 @@
+//
+// Procedure Name:
+//      brWeightsServerConnectInfluence
+//
+// Description:
+//      Update the influences for the weights server node and add a new
+//      influence. Any existing influences which are not incluced in the
+//      currentInfluences list will be removed.
+//
+// Input Arguments:
+//      node                The name of the weights server node.
+//      influence           The name of the influence object.
+//      currentInfluences   The list of current influences. This list
+//                          can also contain new influences.
+//      clear               True, if all current influences should be
+//                          removed.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsServerConnectInfluence( string $node,
+                                             string $influence,
+                                             string $currentInfluences[],
+                                             int $clear )
+{
+    if ($influence != "" && `nodeType $influence` != "transform")
+    {
+        warning "The new influence must be a transform node.";
+        return;
+    }
+
+    string $matrixPlugs[];
+    float $radiusValues[];
+    float $scaleValues[];
+    int $activeValues[];
+    int $worldValues[];
+    int $shapeValues[];
+    string $matrixValues[];
+
+    // Get all current influence data and clear everything, so that it
+    // can properly rebuild in order.
+    brWeightsServerGetAllInfluences($node,
+                                    $matrixPlugs,
+                                    $radiusValues,
+                                    $scaleValues,
+                                    $activeValues,
+                                    $worldValues,
+                                    $shapeValues,
+                                    $matrixValues,
+                                    $currentInfluences,
+                                    1);
+
+    // At this point the currentInfluences array only contains new
+    // influences which aren't connected yet. All existing influences
+    // have been removed but their data is stored in the respective
+    // value arrays.
+
+    if ($clear)
+    {
+        clear $currentInfluences;
+        clear $matrixPlugs;
+    }
+
+    if ($influence != "")
+        $currentInfluences[size($currentInfluences)] = $influence;
+
+    // For all new influences extend the value arrays with the default
+    // values.
+    for ($i = 0; $i < size($currentInfluences); $i ++)
+    {
+        $matrixPlugs[size($matrixPlugs)] = $currentInfluences[$i] + ".worldMatrix[0]";
+        $radiusValues[size($radiusValues)] = -1;
+        $scaleValues[size($scaleValues)] = 1;
+        $activeValues[size($activeValues)] = 1;
+        $worldValues[size($worldValues)] = 0;
+        string $shape[] = `listRelatives -shapes $currentInfluences[$i]`;
+        int $isShape = 0;
+        if (size($shape) && (`nodeType $shape[0]` == "nurbsCurve" || `nodeType $shape[0]` == "mesh"))
+            $isShape = 1;
+        $shapeValues[size($shapeValues)] = $isShape;
+        $matrixValues[size($matrixValues)] = "connect";
+    }
+
+    // All existing influences have been removed with the procedure
+    // brWeightsServerGetAllInfluences.
+    // Now rebuild all influences and also add the new influences.
+    for ($i = 0; $i < size($matrixPlugs); $i ++)
+    {
+        brWeightsControllerConnectAttr($matrixPlugs[$i], ($node + ".influence[" + $i + "].matrix"));
+        setAttr ($node + ".influence[" + $i + "].radius") $radiusValues[$i];
+        setAttr ($node + ".influence[" + $i + "].scale") $scaleValues[$i];
+        setAttr ($node + ".influence[" + $i + "].active") $activeValues[$i];
+        setAttr ($node + ".influence[" + $i + "].worldSpace") $worldValues[$i];
+        setAttr ($node + ".influence[" + $i + "].useShape") $shapeValues[$i];
+        if ($matrixValues[$i] != "connect")
+        {
+            string $matStrings[] = stringToStringArray($matrixValues[$i], ",");
+            eval("setAttr " + $node + ".influence[" + $i + "].restParentMatrix " +
+                 "-type \"matrix\" " + stringArrayToString($matStrings, " "));
+        }
+        else
+        {
+            string $destAttr = $node + ".influence[" + $i + "].restParentMatrix";
+            connectAttr -force ($currentInfluences[$i] + ".parentMatrix[0]") $destAttr;
+            refresh;
+            disconnectAttr ($currentInfluences[$i] + ".parentMatrix[0]") $destAttr;
+
+            string $msg = "Set influence rest for " + $destAttr;
+            brWeightsControllerLog($msg);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights and weightsServer are under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

@@ -1,10 +1,9 @@
-# ----------------------------------------------------------------------
-# Description:
-#
-# Clear the deformer weights.
-# ----------------------------------------------------------------------
-
 import maya.api.OpenMaya as om2
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def clearWeights(attribute):
     """Clear the deformer weights of the given attribute by assigning
@@ -23,11 +22,17 @@ def clearWeights(attribute):
     obj = dataFn.create(emptyArray)
     plug.setMObject(obj)
 
+
+def displayInfo(msg):
+    """Output the given message to the command output.
+    """
+    logger.info(msg)
+
 # ----------------------------------------------------------------------
 # MIT License
 #
 # Copyright (c) 2019 Ingo Clemens, brave rabbit
-# rampWeights is under the terms of the MIT License
+# rampWeights and weightsServer are under the terms of the MIT License
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the

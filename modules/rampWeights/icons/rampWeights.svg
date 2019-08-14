@@ -3,30 +3,21 @@
 <svg version="1.1" id="ramp_weights" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px"
 	 y="0px" viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
 <style type="text/css">
-	.st0{fill:#BCBCBC;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
-	.st1{fill-rule:evenodd;clip-rule:evenodd;fill:#5B5B5B;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
-	.st2{fill-rule:evenodd;clip-rule:evenodd;fill:#7F7F7F;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
-	.st3{fill-rule:evenodd;clip-rule:evenodd;fill:#A5A5A5;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
-	.st4{fill-rule:evenodd;clip-rule:evenodd;fill:#D8D8D8;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
-	.st5{fill-rule:evenodd;clip-rule:evenodd;fill:#D8D8D8;}
-	.st6{fill-rule:evenodd;clip-rule:evenodd;fill:#AE9CDB;}
-	.st7{fill-rule:evenodd;clip-rule:evenodd;fill:none;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:#AE9CDB;stroke:#3F3F3F;stroke-width:8;stroke-miterlimit:10;}
+	.st1{fill-rule:evenodd;clip-rule:evenodd;fill:#AE9CDB;stroke:#3F3F3F;stroke-width:12;stroke-miterlimit:10;}
+	.st2{fill:#808080;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
+	.st3{fill:#BFBFBF;stroke:#3F3F3F;stroke-width:16;stroke-miterlimit:10;}
 </style>
-<rect id="edge_4_" x="426" y="84.8" class="st0" width="32" height="154.2"/>
-<rect id="edge_5_" x="302" y="84.8" class="st0" width="32" height="154.2"/>
-<rect id="edge_3_" x="177" y="82" class="st0" width="32" height="154.2"/>
-<rect id="edge_2_" x="52" y="82" class="st0" width="32" height="154.2"/>
-<rect id="edge_1_" x="73.2" y="200.2" class="st0" width="372.8" height="32"/>
-<rect id="edge" x="70.5" y="59.2" class="st0" width="372.8" height="32"/>
-<rect id="vertex_3_" x="28.4" y="34.4" class="st1" width="80" height="80"/>
-<rect id="vertex_2_" x="28.4" y="176" class="st1" width="80" height="80"/>
-<rect id="vertex_7_" x="152.7" y="34.4" class="st2" width="80" height="80"/>
-<rect id="vertex_6_" x="152.7" y="176" class="st2" width="80" height="80"/>
-<rect id="vertex_11_" x="278" y="34.4" class="st3" width="80" height="80"/>
-<rect id="vertex_10_" x="278" y="176" class="st3" width="80" height="80"/>
-<rect id="vertex_5_" x="402" y="34.4" class="st4" width="80" height="80"/>
-<rect id="vertex_1_" x="402" y="176" class="st4" width="80" height="80"/>
-<rect id="background" x="29" y="293" class="st5" width="454" height="189.6"/>
-<path id="ramp" class="st6" d="M29,478c227,0,227-183,454-183c0,48,0,187.6,0,187.6H29C29,482.6,27.9,478,29,478z"/>
-<rect id="frame" x="29" y="293" class="st7" width="454" height="189.6"/>
+<rect id="line_3_" x="74.2" y="178.2" class="st0" width="112" height="32"/>
+<rect id="line_2_" x="74.2" y="50.2" class="st0" width="112" height="32"/>
+<rect id="line_8_" x="202.2" y="50.2" class="st0" width="112" height="32"/>
+<rect id="line_1_" x="50.2" y="82.2" class="st0" width="32" height="96"/>
+<rect id="line" x="178.2" y="82.2" class="st0" width="32" height="96"/>
+<rect id="vertex_6_" x="21.5" y="149.4" class="st1" width="88" height="88"/>
+<rect id="vertex_2_" x="149.4" y="149.4" class="st1" width="88" height="88"/>
+<rect id="vertex_9_" x="21.5" y="23" class="st1" width="88" height="88"/>
+<rect id="vertex_8_" x="149.4" y="21.5" class="st1" width="88" height="88"/>
+<rect id="vertex_15_" x="277.5" y="23" class="st1" width="88" height="88"/>
+<path id="ramp_2_" class="st2" d="M264.2,490.2h-240v-224c0,0,89.6,16,155.2,83.2C235.4,407,264.2,490.2,264.2,490.2z"/>
+<path id="ramp_1_" class="st3" d="M492.2,138.2c0,89.8,0,352,0,352s-318.2,0-375,0C309,490.2,308,138.2,492.2,138.2z"/>
 </svg>

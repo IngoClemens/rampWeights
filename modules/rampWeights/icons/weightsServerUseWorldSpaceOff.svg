@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 23.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="world_space" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px"
+	 y="0px" viewBox="0 0 24 24" style="enable-background:new 0 0 24 24;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#808080;stroke:#3F3F3F;stroke-width:0.5;stroke-miterlimit:10;}
+	.st1{fill-rule:evenodd;clip-rule:evenodd;fill:#808080;stroke:#3F3F3F;stroke-width:0.5;stroke-miterlimit:10;}
+	.st2{fill-rule:evenodd;clip-rule:evenodd;fill:#808080;stroke:#3F3F3F;stroke-width:1.5;stroke-miterlimit:10;}
+	.st3{fill-rule:evenodd;clip-rule:evenodd;fill:#3F3F3F;}
+</style>
+<polygon id="arrow_1_" class="st0" points="8.8,20.4 16.6,20.4 16.6,22.5 22.5,19 16.6,15.5 16.6,17.6 8.8,17.6 "/>
+<polygon id="arrow" class="st0" points="6.4,15.2 6.4,7.4 8.5,7.4 5,1.5 1.5,7.4 3.6,7.4 3.6,15.2 "/>
+<circle id="circle" class="st0" cx="5" cy="19" r="2.8"/>
+<circle id="circle_1_" class="st1" cx="17" cy="7" r="5.5"/>
+<circle id="circle_2_" class="st2" cx="17" cy="7" r="3.5"/>
+<circle id="circle_3_" class="st3" cx="17" cy="7" r="1.5"/>
+</svg>

@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // AErampWeightsTemplate.mel
 //
-// Attribute Editor template the for the ramp weights node.
+// Attribute Editor template for the ramp weights node.
 //
 // ---------------------------------------------------------------------
 
@@ -20,7 +20,7 @@ global proc AErampWeightsTemplate( string $nodeName )
             editorTemplate -annotation "Limits the startRange value in mirror mode to 0" -addControl "clamp";
             editorTemplate -addControl "centered";
             editorTemplate -addControl "invert";
-            editorTemplate -addControl "useTransform" "brRampWeightsPerformUseTransform";
+            editorTemplate -addControl "useTransform";
             editorTemplate -endNoOptimize;
             editorTemplate -addControl "multiply";
             AEaddRampControl( $nodeName + ".blendCurve" );
@@ -39,7 +39,7 @@ global proc AErampWeightsTemplate( string $nodeName )
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// rampWeights and weightsServer are under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the

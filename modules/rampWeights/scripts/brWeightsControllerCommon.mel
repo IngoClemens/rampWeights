@@ -1,0 +1,1449 @@
+//
+// Procedure Name:
+//      brEditWeightsController
+//
+// Description:
+//      Open the editor for the given weights controller node.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brEditWeightsController( string $type )
+{
+    int $status = brWeightsControllerLoadPlugin($type);
+
+    brWeightsControllerEditUI($type);
+
+    if (!$status)
+    {
+        brWeightsControllerDisplayPluginError($type);
+        return;
+    }
+
+    brWeightsControllerAttachUpdateScript($type);
+    brWeightsControllerAttachSceneChangeScript($type);
+
+    string $node = brWeightsControllerGetNodeFromSelection($type);
+    if ($node != "")
+        brWeightsControllerSelectOptionByName($node);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerLog
+//
+// Description:
+//      Display the given message string as a standard Maya info output.
+//
+// Input Arguments:
+//      message         The message string.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerLog( string $message )
+{
+    string $cmd = "import brWeightsController;";
+    $cmd += "brWeightsController.displayInfo(\"" + $message + "\")";
+    python($cmd);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetPrefix
+//
+// Description:
+//      Build a prefix string for generating control names for the
+//      editors.
+//
+// Input Arguments:
+//      node            The name of the node.
+//
+// Return Value:
+//      string          The prefix name for the ui control.
+//
+global proc string brWeightsControllerGetPrefix( string $node )
+{
+    string $type = `nodeType $node`;
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+    return $prefix;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetPrefixByName
+//
+// Description:
+//      Build a prefix string for generating control names for the
+//      editors.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      string          The prefix name for the ui control.
+//
+global proc string brWeightsControllerGetPrefixByName( string $type )
+{
+    string $sub1 = substring($type, 1, 1);
+    string $sub2 = substring($type, 2, size($type));
+    $sub1 = toupper($sub1);
+    return ("br" + $sub1 + $sub2);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerAttachUpdateScript
+//
+// Description:
+//      Create a script job for refreshing the editor when the selection
+//      changes.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerAttachUpdateScript( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+    scriptJob -parent ($prefix + "NodeOption")
+              -event "SelectionChanged" ("brWeightsControllerAutoRefresh " + $type);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerAttachSceneChangeScript
+//
+// Description:
+//      Create a script job for clearing the editor when the maya scene
+//      changes either by opening a scene or creating a new one.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerAttachSceneChangeScript( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+    string $win = $prefix + "EditWin";
+    scriptJob -parent $win
+              -event "SceneOpened" ("brWeightsControllerAutoRefresh " + $type);
+    scriptJob -parent $win
+              -event "NewSceneOpened" ("brWeightsControllerAutoRefresh " + $type);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerDisplayPluginError
+//
+// Description:
+//      Display that a conflicting version of the weights controller
+//      plug-in is currently loaded.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerDisplayPluginError( string $type )
+{
+    string $path = `pluginInfo -query -path $type`;
+
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    setParent ($prefix + "DeformerLayout");
+
+    text -align "left" -label (uiRes("m_brWeightsControllerCommon.kVersionWarning1"));
+    text -align "left" -font "obliqueLabelFont" -label $path;
+
+    separator -height 15 -style "none";
+
+    string $cmd = "brEditWeightsController " + $type;
+
+    text -align "left" -label (uiRes("m_brWeightsControllerCommon.kVersionWarning2"));
+    columnLayout;
+        button -label "Unload Plug-In and Re-Open Editor"
+               -command ("flushUndo; unloadPlugin " + $type + "; evalDeferred(\"" + $cmd + "\");")
+               -width 220;
+    setParent ..;
+
+    separator -height 15 -style "none";
+
+    text -align "left" -label (uiRes("m_brWeightsControllerCommon.kVersionWarning3"));
+
+    optionMenu -edit -manage 0 ($prefix + "NodeOption");
+    symbolCheckBox -edit -manage 0 ($prefix + "UpdateCheck");
+    iconTextButton -edit -manage 0 ($prefix + "CreateButton");
+    control -edit -manage 0 (`columnLayout -query -parent ($prefix + "AttributesLayout")`);
+    if (`columnLayout -query -exists ($prefix + "InfluencesLayout")`)
+        control -edit -manage 0 (`columnLayout -query -parent ($prefix + "InfluencesLayout")`);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerEditUI
+//
+// Description:
+//      Create the editor window
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerEditUI( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    brWeightsControllerCloseUI($type);
+
+    string $name;
+    string $swapType;
+    int $autoUpdate = 1;
+    if ($type == "rampWeights")
+    {
+        $name = "Ramp Weights";
+        $swapType = "weightsServer";
+        $autoUpdate = 1;
+    }
+    else
+    {
+        $name = "Weights Server";
+        $swapType = "rampWeights";
+        $autoUpdate = 0;
+    }
+
+    string $win = $prefix + "EditWin";
+    string $version = `pluginInfo -query -version $type`;
+    window -title ("Edit " + $name + " " + $version) -widthHeight 650 450 $win;
+
+    string $mainForm = `formLayout`;
+
+    string $mainScroll = `scrollLayout -childResizable 1`;
+
+    string $mainLayout = `columnLayout -adjustableColumn 1`;
+
+        // -------------------------------------------------------------
+        // node selector
+        // -------------------------------------------------------------
+
+        string $nodeOptionForm = `formLayout`;
+            string $cmd = "brEditWeightsController " + $swapType;
+            string $toggleButton = `iconTextButton -width 34
+                                                   -height 34
+                                                   -image ($type + "Toggle.svg")
+                                                   -command ("brWeightsControllerCloseUI " + $type + "; " + $cmd)
+                                                   -doubleClickCommand $cmd
+                                                   -annotation (uiRes("m_brWeightsControllerCommon.kToggleNode"))`;
+            string $nodeLabel = `text -label $name -align "left" -width 90`;
+
+            string $option = $prefix + "NodeOption";
+            optionMenu -changeCommand ("brWeightsControllerGetData " + $type)
+                       -annotation (uiRes("m_brWeightsControllerCommon.kNodeOption"))
+                       ($prefix + "NodeOption");
+                menuItem -label "None";
+
+            popupMenu;
+                menuItem -label ("Select " + $name)
+                         -command ("if (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\") != \"\") " +
+                                   "select -r (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\"));");
+                menuItem -divider 1;
+                string $deleteCmd1 = ("if (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\") != \"\") { " +
+                                      "select -r (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\")); " +
+                                      "brWeightsControllerDeleteNode " + $type + " 0; brWeightsControllerRefreshUI " + $type + ";}");
+                string $deleteCmd2 = ("if (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\") != \"\") { " +
+                                      "select -r (brWeightsControllerGetSelectedNodeOption(\"" + $type + "\")); " +
+                                      "brWeightsControllerDeleteNode " + $type + " 1; brWeightsControllerRefreshUI " + $type + ";}");
+                menuItem -label ("Delete " + $name + " Node") -command $deleteCmd1;
+                menuItem -label ("Delete " + $name + " Node And Remove Weights") -command $deleteCmd2;
+
+            string $updateButton = `symbolCheckBox -width 26
+                                                   -height 26
+                                                   -onImage "weightsControllerUpdateOn.svg"
+                                                   -offImage "weightsControllerUpdateOff.svg"
+                                                   -value $autoUpdate
+                                                   -changeCommand ("if (#1) brWeightsControllerRefreshUI " + $type + ";")
+                                                   -annotation (uiRes("m_brWeightsControllerCommon.kUpdate"))
+                                                   ($prefix + "UpdateCheck")`;
+            string $createButton = `iconTextButton -width 26
+                                                   -height 26
+                                                   -image "weightsControllerCreate.svg"
+                                                   -command ("brWeightsControllerPerformCreate " + $type)
+                                                   -annotation (uiRes("m_brWeightsControllerCommon.kCreate"))
+                                                   ($prefix + "CreateButton")`;
+
+            formLayout  -edit
+
+                        -attachForm $toggleButton "top" 2
+                        -attachForm $toggleButton "left" 5
+                        -attachForm $nodeLabel "top" 12
+                        -attachForm $option "top" 10
+                        -attachForm $updateButton "top" 7
+                        -attachForm $createButton "top" 7
+                        -attachForm $createButton "right" 5
+
+                        -attachControl $nodeLabel "left" 10 $toggleButton
+                        -attachControl $option "left" 3 $nodeLabel
+                        -attachControl $option "right" 10 $updateButton
+                        -attachControl $updateButton "right" 5 $createButton
+
+                        $nodeOptionForm;
+        setParent $mainLayout;
+
+        separator -style "none" -height 5;
+
+        // -------------------------------------------------------------
+        // connected deformer
+        // -------------------------------------------------------------
+
+        int $state = `optionVar -query ($prefix + "DeformerFrameState")`;
+        string $deformerFrame = `frameLayout -label "Deformer"
+                                             -labelIndent 3
+                                             -collapsable 1
+                                             -collapse $state
+                                             -marginWidth 5
+                                             -marginHeight 5`;
+            columnLayout -adjustableColumn 1 ($prefix + "DeformerLayout");
+
+        setParent $mainLayout;
+
+        // -------------------------------------------------------------
+        // weights controller attributes
+        // -------------------------------------------------------------
+
+        $state = `optionVar -query ($prefix + "AttributesFrameState")`;
+        string $attributesFrame = `frameLayout -label "Attributes"
+                                               -labelIndent 3
+                                               -collapsable 1
+                                               -collapse $state
+                                               -marginWidth 5
+                                               -marginHeight 5`;
+            columnLayout -adjustableColumn 1 ($prefix + "AttributesLayout");
+
+        setParent $mainLayout;
+
+        // -------------------------------------------------------------
+        // influence list
+        // -------------------------------------------------------------
+
+        string $influencesFrame;
+        if ($type == "weightsServer")
+        {
+            $state = `optionVar -query ($prefix + "InfluenceFrameState")`;
+            $influencesFrame = `frameLayout -label "Influences"
+                                            -labelIndent 3
+                                            -collapsable 1
+                                            -collapse $state
+                                            -marginWidth 5
+                                            -marginHeight 5`;
+                columnLayout -adjustableColumn 1 ($prefix + "InfluencesLayout");
+        }
+
+        setParent $mainLayout;
+
+    setParent $mainForm;
+
+    string $closeButton = `button -l "Close" -c ("brWeightsControllerCloseUI " + $type)`;
+
+    formLayout  -e
+
+                -af $mainScroll "top" 0
+                -af $mainScroll "left" 0
+                -af $mainScroll "right" 0
+                -af $closeButton "left" 5
+                -af $closeButton "right" 5
+                -af $closeButton "bottom" 5
+
+                -ac $mainScroll "bottom" 10 $closeButton
+
+                $mainForm;
+
+    // -----------------------------------------------------------------
+    // collapse commands
+    // -----------------------------------------------------------------
+
+    frameLayout -edit
+                -collapseCommand ("optionVar -intValue " + $prefix + "DeformerFrameState " +
+                                  "(`frameLayout -query -collapse " + $deformerFrame + "`)")
+                $deformerFrame;
+    frameLayout -edit
+                -expandCommand ("optionVar -intValue " + $prefix + "DeformerFrameState " +
+                                "(`frameLayout -query -collapse " + $deformerFrame + "`)")
+                $deformerFrame;
+    frameLayout -edit
+                -collapseCommand ("optionVar -intValue " + $prefix + "AttributesFrameState " +
+                                  "(`frameLayout -query -collapse " + $attributesFrame + "`)")
+                $attributesFrame;
+    frameLayout -edit
+                -expandCommand ("optionVar -intValue " + $prefix + "AttributesFrameState " +
+                                "(`frameLayout -query -collapse " + $attributesFrame + "`)")
+                $attributesFrame;
+
+    if ($type == "weightsServer")
+    {
+        frameLayout -edit
+                    -collapseCommand ("optionVar -intValue " + $prefix + "InfluenceFrameState " +
+                                      "(`frameLayout -query -collapse " + $influencesFrame + "`)")
+                    $influencesFrame;
+        frameLayout -edit
+                    -expandCommand ("optionVar -intValue " + $prefix + "InfluenceFrameState " +
+                                    "(`frameLayout -query -collapse " + $influencesFrame + "`)")
+                    $influencesFrame;
+    }
+
+    showWindow $win;
+
+    brWeightsControllerBuildMenu($type);
+}
+
+
+// ---------------------------------------------------------------------
+// cleanup
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brWeightsControllerCloseUI
+//
+// Description:
+//      Close and remove the editor window.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerCloseUI( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+    string $window = $prefix + "EditWin";
+    if (`window -ex $window`)
+        deleteUI $window;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerClearAll
+//
+// Description:
+//      Delete all deformer items and node attributes.
+//      For the weights server also clear the influence items.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerClearAll( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    brWeightsControllerRemoveChildItems ($prefix + "DeformerLayout");
+    brWeightsControllerRemoveChildItems ($prefix + "AttributesLayout");
+
+    if ($type == "weightsServer")
+        brWeightsControllerRemoveChildItems ($prefix + "InfluencesLayout");
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerRemoveChildItems
+//
+// Description:
+//      Delete all controls from the given layout.
+//
+// Input Arguments:
+//      layout          The name of the layout to clear.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerRemoveChildItems( string $layout )
+{
+    string $items[] = `columnLayout -query -childArray $layout`;
+    for ($i in $items)
+        deleteUI $i;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetNodeFromSelection
+//
+// Description:
+//      Return the first weights controller node from the history of the
+//      selection. If the selection is a transform, check if it's
+//      connected to a weights controller node as an influence. In this
+//      case return the connected weights controller node.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      string          The first weights controller node found on
+//                      the object's history.
+//
+global proc string brWeightsControllerGetNodeFromSelection( string $type )
+{
+    string $sel[] = `ls -selection`;
+    if (!size($sel))
+        return "";
+
+    string $hist[] = `listHistory`;
+    for ($node in $hist)
+    {
+        if (`nodeType $node` == $type)
+            return $node;
+    }
+
+    if (`nodeType $sel[0]` == "transform")
+    {
+        string $conn[] = `connectionInfo -destinationFromSource ($sel[0] + ".worldMatrix[0]")`;
+        string $items[] = stringToStringArray($conn[0], ".");
+        if (size($items) && `nodeType $items[0]` == $type)
+            return $items[0];
+    }
+
+    return "";
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerRefreshUI
+//
+// Description:
+//      Remove all items from the editor and load the weights controller
+//      node from the current selection if any.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerRefreshUI( string $type )
+{
+    brWeightsControllerBuildMenu($type);
+    brWeightsControllerClearAll($type);
+
+    string $node = brWeightsControllerGetNodeFromSelection($type);
+    if ($node != "")
+        brWeightsControllerSelectOptionByName($node);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerAutoRefresh
+//
+// Description:
+//      Refresh the UI if the current node is not locked.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerAutoRefresh( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    if (`symbolCheckBox -query -value ($prefix + "UpdateCheck")`)
+        brWeightsControllerRefreshUI($type);
+}
+
+
+// ---------------------------------------------------------------------
+// option menu
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brWeightsControllerBuildMenu
+//
+// Description:
+//      Build the option menu for the weights controller node and
+//      collect all weights controller nodes from the scene.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerBuildMenu( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+    string $option = $prefix + "NodeOption";
+
+    if (`optionMenu -exists $option`)
+    {
+        string $items[] = `optionMenu -query -itemListLong $option`;
+        for ($c in $items)
+            deleteUI $c;
+    }
+
+    menuItem -label "Select" -parent $option;
+
+    string $nodes[] = `ls -type $type`;
+    for ($n in $nodes)
+        menuItem -label $n -parent $option;
+
+    if (!size($nodes))
+        brWeightsControllerClearAll($type);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetSelectedNodeOption
+//
+// Description:
+//      Return the name of the selected node in the option menu.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      string          The name of the selected node.
+//
+global proc string brWeightsControllerGetSelectedNodeOption( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    string $node = `optionMenu -query -value ($prefix + "NodeOption")`;
+    if ($node == "Select")
+        $node = "";
+    return $node;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerSelectOptionByName
+//
+// Description:
+//      Select the given node name in the option menu and refresh the
+//      ui.
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerSelectOptionByName( string $node )
+{
+    string $prefix = brWeightsControllerGetPrefix($node);
+    string $option = $prefix + "NodeOption";
+
+    string $items[] = `optionMenu -query -itemListLong $option`;
+    int $index = -1;
+    for ($i = 0; $i < size($items); $i ++)
+    {
+        if (`menuItem -query -label $items[$i]` == $node)
+        {
+            $index = $i + 1;
+            break;
+        }
+    }
+
+    if ($index > -1)
+    {
+        optionMenu -edit -select $index $option;
+        brWeightsControllerGetData((`nodeType $node`));
+    }
+}
+
+
+// ---------------------------------------------------------------------
+// get the data from an existing setup
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      brWeightsControllerGetData
+//
+// Description:
+//      Get the controlled deformer from the selected node and populate
+//      the editor.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerGetData( string $type )
+{
+    brWeightsControllerClearAll($type);
+
+    string $node = brWeightsControllerGetSelectedNodeOption($type);
+    if ($node == "")
+        return;
+
+    brWeightsControllerGetDeformers($type);
+    if ($type == "rampWeights")
+    {
+        brRampWeightsCreateAttributeControls($node);
+    }
+    else
+    {
+        brWeightsServerCreateAttributeControls($node);
+        brWeightsServerGetInfluences;
+    }
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetDeformers
+//
+// Description:
+//      Get all controlled deformers of the selected node and generate
+//      the list items.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerGetDeformers( string $type )
+{
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    brWeightsControllerRemoveChildItems($prefix + "DeformerLayout");
+
+    string $node = brWeightsControllerGetSelectedNodeOption($type);
+    if ($node == "")
+        return;
+
+    int $outIds[] = `getAttr -multiIndices ($node + ".weightList")`;
+    for ($id in $outIds)
+        brWeightsControllerCreateDeformerItem($node, $id);
+
+    brWeightsControllerCreateAddDeformerButton($node);
+}
+
+
+//
+// Procedure Name:
+//      hasInputComponents
+//
+// Description:
+//      Check if the input component list contains any component data.
+//      Return false if the components are missing because of a legacy
+//      setup.
+//
+// Input Arguments:
+//      node            The weights controller node.
+//      index           The weights controller index.
+//
+// Return Value:
+//      int             True, if the component list contains data.
+//
+proc int hasInputComponents( string $node, int $index )
+{
+    string $comp[] = `getAttr ($node + ".inputComponentsList[" + $index + "].inputComponents")`;
+    if (size($comp))
+        return 1;
+    return 0;
+}
+
+
+//
+// Procedure Name:
+//      hasInputGeometry
+//
+// Description:
+//      Check if the mesh or curve geometry input at the current index
+//      is connected. Return true, if the plug is connected.
+//
+// Input Arguments:
+//      node            The weights controller node.
+//      index           The weights controller index.
+//      deformer        The name of the deformer to be controlled.
+//
+// Return Value:
+//      int             True, if the geometry plug is connected.
+//
+proc int hasInputGeometry( string $node, int $index, string $deformer )
+{
+    string $plug = brWeightsControllerGetGeometryPlug($index, $deformer);
+    string $input = `connectionInfo -sourceFromDestination ($node + "." + $plug)`;
+    if (size($input))
+        return 1;
+    return 0;
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerCreateDeformerItem
+//
+// Description:
+//      Create the list item for the given deformer and index.
+//
+// Input Arguments:
+//      node            The weights controller node.
+//      index           The index of the weights output.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerCreateDeformerItem( string $node, int $index )
+{
+    string $prefix = brWeightsControllerGetPrefix($node);
+
+    // Get the deformer name from the given output attribute.
+    string $deformer;
+    int $targetId = -1;
+    string $targetName = "";
+    string $cmd;
+
+    string $conn[] = `listConnections -source 0
+                                      -destination 1
+                                      -plugs 1
+                                      ($node + ".weightList[" + $index + "].weights")`;
+    if (!size($conn))
+        return;
+
+    // In case of a blend shape node get the name of the target channel.
+    string $items[] = stringToStringArray($conn[0], ".");
+    $deformer = $items[0];
+    if (`gmatch $items[size($items) - 2] "*inputTargetGroup*"`)
+    {
+        $targetId = `match "[0-9]+" $items[size($items) - 2]`;
+        string $shapes[] = `aliasAttr -query $deformer`;
+        for ($i = 0; $i < size($shapes); $i ++)
+        {
+            if (`match "[0-9]+" $shapes[$i + 1]` == $targetId)
+            {
+                $targetName = $shapes[$i];
+                break;
+            }
+        }
+    }
+
+    int $divSpace = 5;
+    int $isRampWeights = 0;
+    if (`nodeType $node` == "rampWeights")
+        $isRampWeights = 1;
+
+    int $update = 0;
+    if (!hasInputComponents($node, $index))
+        $update = 1;
+    if (!hasInputGeometry($node, $index, $deformer))
+        $update = 1;
+
+    // -----------------------------------------------------------------
+    // Create the list item.
+    // -----------------------------------------------------------------
+    setParent ($prefix + "DeformerLayout");
+
+    string $form = `formLayout`;
+
+    // If the deformer components are not present because of a legacy
+    // setup add a popup menu item to update the setup.
+    if ($update)
+    {
+        popupMenu;
+            $cmd = ("brWeightsControllerConnectGeometry \"" + $node + "\" " + $index + " \"" +
+                    $deformer + "\" " + $targetId + ";\n");
+            $cmd += ("brWeightsControllerTransferComponents \"" + $node + "\" " + $index + " \"" +
+                     $deformer + "\" " + $targetId + ";\n");
+            $cmd += "evalDeferred(\"brWeightsControllerRefreshUI " + (`nodeType $node`) + "\");\n";
+            $cmd += "evalDeferred(\"brWeightsControllerSelectOptionByName " + $node + "\");";
+            menuItem -label "Update Node" -command $cmd;
+
+        $divSpace = 15;
+    }
+
+    // -----------------------------------------------------------------
+    // deformer information
+    // -----------------------------------------------------------------
+    string $indexText = `text -label ("Output " + $index + ":") -align "left" -font "boldLabelFont"`;
+    string $deformerText = `text -label $deformer -align "left"`;
+    popupMenu;
+        menuItem -label "Select" -command ("select -replace " + $deformer);
+
+    string $label2 = "";
+    string $label3 = "";
+    if ($targetId >= 0)
+    {
+        $label2 = "Channel " + $targetId + ": ";
+        $label3 = $targetName;
+    }
+    string $l2 = `text -label $label2 -align "left" -font "obliqueLabelFont"`;
+    string $l3 = `text -label $label3 -align "left"`;
+
+    // -----------------------------------------------------------------
+    // value slider
+    // -----------------------------------------------------------------
+    string $slider = `floatSlider -width 75 -minValue 0 -maxValue 1`;
+
+    // -----------------------------------------------------------------
+    // buttons
+    // -----------------------------------------------------------------
+    $cmd = "setAttr " + $node + ".invertList[" + $index + "]";
+    int $value = `getAttr ($node + ".invertList[" + $index + "]")`;
+    string $invert = `symbolCheckBox -width 26
+                                     -height 26
+                                     -onImage "weightsControllerInvertOn.svg"
+                                     -offImage "weightsControllerInvertOff.svg"
+                                     -value $value
+                                     -changeCommand ($cmd + " #1")
+                                     -annotation (uiRes("m_brWeightsControllerCommon.kChannelInvert"))`;
+
+    string $transformBtn = `iconTextButton -manage 0
+                                           -style "iconOnly"
+                                           -annotation (uiRes("m_brEditRampWeights.kTransform"))
+                                           ("brRampWeightsTransformButton" + $index)`;
+
+    if ($isRampWeights)
+    {
+        iconTextButton -edit -manage 1 $transformBtn;
+        popupMenu;
+            menuItem -label "Connect Selected Transform"
+                     -command ("brRampWeightsConnectSelectedTransform \"" + $node + "\" " + $index);
+            menuItem -label "Disconnect"
+                     -command ("brRampWeightsDisconnectTransform \"" + $node + "\" " + $index);
+            menuItem -label "Delete"
+                     -command ("brRampWeightsDeleteTransform \"" + $node + "\" " + $index)
+                     ("brRampWeightsDeleteTransformItem" + $index);
+    }
+
+    $cmd = "brWeightsControllerRemoveDeformerAtIndex \"" + $node + "\" " + $index + " \"" + $deformer + "\"";
+    string $deletBtn1 = `iconTextButton -style "iconOnly"
+                                        -image "weightsControllerDisconnect.svg"
+                                        -command ($cmd + " 0")
+                                        -annotation (uiRes("m_brWeightsControllerCommon.kDisconnectKeep"))`;
+    string $deletBtn2 = `iconTextButton -style "iconOnly"
+                                        -image "weightsControllerDisconnectDelete.svg"
+                                        -command ($cmd + " 1")
+                                        -annotation (uiRes("m_brWeightsControllerCommon.kDisconnect"))`;
+    $cmd = "brWeightsControllerTransferComponents \"" + $node + "\" " + $index + " \"" + $deformer + "\" " + $targetId;
+    string $updateBtn = `iconTextButton -style "iconOnly"
+                                        -image "weightsControllerUpdateComponents.svg"
+                                        -command $cmd
+                                        -annotation (uiRes("m_brWeightsControllerCommon.kUpdateComponents"))`;
+
+    // -----------------------------------------------------------------
+    // layout
+    // -----------------------------------------------------------------
+    string $div = `separator -style "in" -horizontal 1`;
+
+    formLayout  -edit
+
+                -attachForm $indexText "left" 0
+                -attachForm $indexText "top" 10
+                -attachForm $deformerText "top" 10
+                -attachForm $l2 "top" 10
+                -attachForm $l3 "top" 10
+                -attachForm $slider "top" 9
+                -attachForm $invert "top" 3
+                -attachForm $transformBtn "top" 3
+                -attachForm $deletBtn1 "top" 3
+                -attachForm $deletBtn2 "top" 3
+                -attachForm $updateBtn "top" 3
+                -attachForm $updateBtn "right" 0
+                -attachForm $div "left" 0
+                -attachForm $div "right" 0
+
+                -attachControl $deformerText "left" 5 $indexText
+                -attachControl $l2 "left" 0 $deformerText
+                -attachControl $l3 "left" 0 $l2
+                -attachControl $l3 "right" 25 $slider
+                -attachControl $slider "right" 10 $invert
+                -attachControl $invert "right" 5 $transformBtn
+                -attachControl $transformBtn "right" 5 $deletBtn1
+                -attachControl $deletBtn1 "right" 5 $deletBtn2
+                -attachControl $deletBtn2 "right" 5 $updateBtn
+                -attachControl $div "top" $divSpace $updateBtn
+
+                -attachPosition $deformerText "right" 0 30
+
+                $form;
+
+    // If the deformer components are not present because of a legacy
+    // setup mark the item as invalid and add the info about updating.
+    if ($update)
+    {
+        formLayout -edit -backgroundColor 0.5 0.16 0.16 $form;
+
+        string $updateInfo = `text -label (uiRes("m_brWeightsControllerCommon.kUpdateNodeInfo"))
+                              -align "left" -font "obliqueLabelFont"`;
+
+        formLayout  -edit
+
+                    -attachForm $updateInfo "left" 0
+
+                    -attachControl $updateInfo "top" 5 $indexText
+
+                    $form;
+    }
+
+    setParent ..;
+
+    // -----------------------------------------------------------------
+    // commands
+    // -----------------------------------------------------------------
+    string $sliderAttr = $deformer + ".weight[" + $targetId + "]";
+    if ($targetId == -1)
+        $sliderAttr = $deformer + ".envelope";
+    connectControl $slider $sliderAttr;
+    floatSlider -edit -annotation $sliderAttr $slider;
+
+    if ($isRampWeights)
+    {
+        // Define the state of the transform button depending on whether
+        // the placementMatrixList item is connected or not.
+        string $plug = `connectionInfo -sourceFromDestination ($node + ".placementMatrixList[" + $index + "]")`;
+        int $connected = 0;
+        if ($plug != "")
+            $connected = 1;
+        brRampWeightsSetTransformButton($node, $index, $connected);
+    }
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerCreateAddDeformerButton
+//
+// Description:
+//      Create the button for adding one or more deformer to the weights
+//      controller node.
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerCreateAddDeformerButton( string $node )
+{
+    string $type = `nodeType $node`;
+    string $prefix = brWeightsControllerGetPrefixByName($type);
+
+    setParent ($prefix + "DeformerLayout");
+
+    columnLayout;
+        separator -style "none" -height 10;
+        iconTextButton -width 42
+                       -height 28
+                       -image "weightsControllerAddDeformer.svg"
+                       -command ("brWeightsControllerPerformAddDeformer \"" + $node + "\"; brWeightsControllerGetDeformers " + $type + ";")
+                       -annotation (uiRes("m_brWeightsControllerCommon.kAddDeformer"));
+
+    setParent ..;
+}
+
+
+// ---------------------------------------------------------------------
+// actions
+// ---------------------------------------------------------------------
+
+//
+// Procedure Name:
+//      getSelectedBlendShapeChannels
+//
+// Description:
+//      Get the names of the selected channels of the blend shape node
+//      from the channel box.
+//
+// Input Arguments:
+//      None
+//
+// Return Value:
+//      string[]        The list of selected channel names.
+//
+proc string[] getSelectedBlendShapeChannels()
+{
+    global string $gChannelBoxName;
+
+    string $attr[];
+
+    string $sel[] = `ls -selection`;
+    if (size($sel) == 1 && `nodeType $sel[0]` == "blendShape")
+        $attr = `channelBox -query -selectedMainAttributes $gChannelBoxName`;
+    else
+        $attr = `channelBox -query -selectedHistoryAttributes $gChannelBoxName`;
+
+    return $attr;
+}
+
+
+//
+// Procedure Name:
+//      getBlendShapeTargetIndices
+//
+// Description:
+//      Get the indices and names of the selected channels of the blend
+//      shape node from the channel box.
+//
+// Input Arguments:
+//      bsNode          The blend shape node.
+//      channels[]      The list of selected channel names.
+//
+// Return Value:
+//      int[]           The list of selected channel indices.
+//
+proc int[] getBlendShapeTargetIndices( string $bsNode, string $channels[] )
+{
+    global string $gChannelBoxName;
+
+    int $indices[];
+    clear $channels;
+
+    string $attr[] = getSelectedBlendShapeChannels();
+    string $shapes[] = `aliasAttr -query $bsNode`;
+    for ($i = 0; $i < size($shapes); $i ++)
+    {
+        for ($a in $attr)
+        {
+            if ($shapes[$i] == $a)
+            {
+                $indices[size($indices)] = `match "[0-9]+" $shapes[$i + 1]`;
+                $channels[size($channels)] = $shapes[$i];
+                break;
+            }
+        }
+    }
+    return $indices;
+}
+
+
+//
+// Procedure Name:
+//      addDeformer
+//
+// Description:
+//      Connect the given deformer with the weights controller node.
+//      Also, connect the input mesh of the deformer to the weights
+//      controller as well as the transform of the deformed mesh.
+//      Copy the deformer components to the weights controller which is
+//      necessary to avoid any cyclic dependencies.
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//      deformer        The name of the deformer to be controlled.
+//      index           The index of the blend shape target if any.
+//
+// Return Value:
+//      None
+//
+proc addDeformer( string $node, string $deformer, int $targetIndex )
+{
+    int $index = brWeightsControllerConnectDeformer($node, $deformer, $targetIndex);
+    brWeightsControllerConnectGeometry($node, $index, $deformer, $targetIndex);
+    brWeightsControllerTransferComponents($node, $index, $deformer, $targetIndex);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerPerformCreate
+//
+// Description:
+//      Create a new weights controller node either unconnected in case
+//      the current selection is not valid or connect it to the selected
+//      deformer.
+//      Currently only one selection is supported for the initial
+//      creation. Mostly because mixed selections of other deformers
+//      and blend shape nodes would make it impossible to select
+//      certain blend shape channels. This way or another a selection
+//      rule has to be defined and it's easier to just limit to one
+//      selection only than to set up a set of rules.
+//
+// Input Arguments:
+//      type            The node type.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerPerformCreate( string $type )
+{
+    string $deformer;
+    string $createUnconnected = 0;
+
+    string $sel[] = `ls -selection`;
+    // If there is nothing selected create an unconnected node.
+    if (!size($sel))
+        $createUnconnected = 1;
+    else
+    {
+        $deformer = $sel[0];
+        // If the selected node is not a blend shape node or deformer
+        // which doesn't support weights create an unconnected node.
+        if (`nodeType $deformer` != "blendShape" && !`attributeQuery -exists -node $deformer "weightList"`)
+            $createUnconnected = 1;
+        else if (`nodeType $deformer` == "rampWeights" || `nodeType $deformer` == "weightsServer")
+            $createUnconnected = 1;
+    }
+
+    string $node;
+    if ($createUnconnected)
+        $node = brWeightsControllerCreateNode("", "", $type);
+    else
+    {
+        int $indices[] = {0};
+        string $channels[] = {""};
+        if (`nodeType $deformer` == "blendShape")
+            $indices = getBlendShapeTargetIndices($deformer, $channels);
+
+        $node = brWeightsControllerCreateNode($deformer, $channels[0], $type);
+        select -replace $deformer;
+
+        for ($i = 0; $i < size($indices); $i ++)
+            addDeformer($node, $deformer, $indices[$i]);
+    }
+
+    brWeightsControllerRefreshUI($type);
+
+    brWeightsControllerSelectOptionByName($node);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerPerformAddDeformer
+//
+// Description:
+//      Add the selected deformer to the weights controller node. In
+//      case of a blend shape node use the selected channel/s from the
+//      channel box.
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerPerformAddDeformer( string $node )
+{
+    string $type = `nodeType $node`;
+
+    if ($node == "")
+        return;
+
+    string $sel[] = `ls -selection`;
+    if (!size($sel))
+        return;
+
+    if ((`nodeType $sel[0]` == "blendShape" || `attributeQuery -exists -node $sel[0] "weightList"`) &&
+        `nodeType $sel[0]` != $type)
+    {
+        int $indices[];
+        string $channels[];
+        if (`nodeType $sel[0]` == "blendShape")
+        {
+            $indices = getBlendShapeTargetIndices($sel[0], $channels);
+            for ($i = 0; $i < size($indices); $i ++)
+                addDeformer($node, $sel[0], $indices[$i]);
+        }
+        else
+        {
+            for ($s in $sel)
+                addDeformer($node, $s, 0);
+        }
+    }
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerRemoveDeformerAtIndex
+//
+// Description:
+//      Disconnect the deformer at the given index and remove the
+//      weights if required.
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//      index           The index of the connected deformer.
+//      deformer        The name of the deformer to remove.
+//      removeWeights   True, if any controlled weights should be reset.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerRemoveDeformerAtIndex( string $node,
+                                                      int $index,
+                                                      string $deformer,
+                                                      int $removeWeights )
+{
+    string $conn[] = `listConnections -plugs 1
+                                      -connections 1
+                                      ($node + ".weightList[" + $index + "].weights")`;
+    if (size($conn))
+    {
+        // Disconnect the weights controller node and remove the output
+        // weightList entry.
+        disconnectAttr $conn[0] $conn[1];
+        removeMultiInstance -break 1 ($node + ".weightList[" + $index + "]");
+
+        // If the matrix list also has incoming connections at the
+        // current index because of a connected placement transform
+        // disconnect this as well and also remove the list index.
+        string $matrixConn[] = `listConnections -plugs 1
+                                                -connections 1
+                                                ($node + ".matrixList[" + $index + "]")`;
+        if (size($matrixConn))
+        {
+            disconnectAttr $matrixConn[1] $matrixConn[0];
+            removeMultiInstance -break 1 ($node + ".matrixList[" + $index + "]");
+        }
+
+        // Clear the weights if requested.
+        if ($removeWeights)
+        {
+            if (`nodeType $deformer` == "blendShape")
+            {
+                string $cmd = "import brWeightsController;";
+                $cmd += "brWeightsController.clearWeights(\"" + $conn[1] + "\")";
+                python($cmd);
+            }
+            // In case of a regular deformer only the weight list item
+            // needs to get removed which clears all weights
+            // automatically.
+            else
+                removeMultiInstance -break 1 ($deformer + ".weightList[0]");
+        }
+    }
+
+    // Reselect the weights controller node to refresh the editor.
+    evalDeferred("brWeightsControllerSelectOptionByName \"" + $node + "\"");
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerConnectAttr
+//
+// Description:
+//      Connect the given attributes and log the connection.
+//
+// Input Arguments:
+//      source          The source attribute for the connection.
+//      destination     The destination attribute for the connection.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerConnectAttr( string $source, string $destination )
+{
+    connectAttr -force $source $destination;
+
+    string $message = "Connected " + $source + " " + $destination;
+    brWeightsControllerLog($message);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerDisconnectAttr
+//
+// Description:
+//      Disconnect the given attributes and log the disconnection.
+//
+// Input Arguments:
+//      source          The source attribute for the connection.
+//      destination     The destination attribute for the connection.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerDisconnectAttr( string $source, string $destination )
+{
+    disconnectAttr $source $destination;
+
+    string $message = "Disonnected " + $source + " " + $destination;
+    brWeightsControllerLog($message);
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerGetGeometryPlug
+//
+// Description:
+//      Return the attribute for the goemetry connection on the weights
+//      controller node.
+//
+// Input Arguments:
+//      index           The deformer index of the weights controller.
+//      deformer        The name of the deformer to be controlled.
+//
+// Return Value:
+//      string          The attribute name of the geometry plug.
+//
+global proc string brWeightsControllerGetGeometryPlug( int $index, string $deformer )
+{
+    string $srcAttr = `connectionInfo -sourceFromDestination ($deformer + ".input[0].inputGeometry")`;
+
+    // Determine the type of deformed geometry.
+    string $type = `getAttr -type $srcAttr`;
+    if ($type == "mesh")
+        ;
+    else if ($type == "nurbsCurve")
+        $type = "curve";
+    else
+    {
+        warning ("The geometry type " + $type + " is not supported");
+        return "";
+    }
+
+   return ($type + "[" + $index + "]");
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights and weightsServer are under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

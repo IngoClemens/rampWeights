@@ -1,0 +1,152 @@
+//
+// Procedure Name:
+//      getTransform
+//
+// Description:
+//      Return the transform node of the deformed geometry
+//
+// Input Arguments:
+//      node            The name of the deformer node.
+//
+// Return Value:
+//      string          The full path of the transform node.
+//
+proc string getTransform( string $node )
+{
+    string $hist[] = `listHistory $node`;
+    string $transform[];
+    for ($h in $hist)
+    {
+        string $items[] = `ls -shapes -intermediateObjects $h`;
+        if (size($items))
+        {
+            $transform = `listRelatives -fullPath -parent $items[0]`;
+            break;
+        }
+    }
+    return $transform[0];
+}
+
+
+//
+// Procedure Name:
+//      brWeightsControllerConnectGeometry
+//
+// Description:
+//      Connect the mesh and transform to the weights controller node.
+//
+//      This procedure is important for updating an existing setup from
+//      earlier versions. In order to support a proper parallel
+//      evaluation the mesh and it's transform need to be connected to
+//      the weights controller. Previous versions of the nodes didn't
+//      necessarily require this. The procedure takes care of connecting
+//      all important plugs.
+//      In case of the ramp weights node a connected placement node also
+//      needs to get connected to a different matrix attribute than
+//      in previous versions (see the comments in the procedure below).
+//
+// Input Arguments:
+//      node            The name of the weights controller node.
+//      index           The deformer index of the weights controller.
+//      deformer        The name of the deformer to be controlled.
+//      targetIndex     The index of the blend shape target if any.
+//
+// Return Value:
+//      None
+//
+global proc brWeightsControllerConnectGeometry( string $node,
+                                                int $index,
+                                                string $deformer,
+                                                int $targetIndex )
+{
+    string $msg;
+
+    string $srcAttr = `connectionInfo -sourceFromDestination ($deformer + ".input[0].inputGeometry")`;
+
+    // Returns either mesh[index] or curve[index] to build the attribute
+    // name.
+    string $plug = brWeightsControllerGetGeometryPlug($index, $deformer);
+    if ($plug == "")
+        return;
+
+    string $destAttr = $node + "." + $plug;
+
+    // Previous versions of the controller nodes might have the mesh
+    // shape or intermediate shape connected to the mesh input. Since
+    // this is not ideal, break the connection and use the geometry plug
+    // which also goes into the deformer.
+    string $input = `connectionInfo -sourceFromDestination $destAttr`;
+    int $connect = 1;
+    if ($input != "")
+    {
+        // Check if the connected node is a mesh.
+        string $items[] = stringToStringArray($input, ".");
+        if (`nodeType $items[0]` == "mesh")
+            brWeightsControllerDisconnectAttr($input, $destAttr);
+        else
+            $connect = 0;
+    }
+    if ($connect)
+        brWeightsControllerConnectAttr($srcAttr, $destAttr);
+
+    // Connect the transform matrix.
+    string $transform = getTransform($deformer);
+    $srcAttr = $transform + ".worldMatrix[0]";
+    $destAttr = $node + ".matrixList[" + $index + "]";
+    $input = `connectionInfo -sourceFromDestination $destAttr`;
+    if ($input == "")
+    {
+        brWeightsControllerConnectAttr($srcAttr, $destAttr);
+    }
+    // If the matrix list index is already connected in case of a ramp
+    // weights node it's possible that the connected transform is the
+    // placement node rather than the mesh. In version 3.0.0 of the ramp
+    // weights node the placement node was connected to the matrix list
+    // and the mesh transform to the world matrix attribute. This has
+    // been changed with version 4.0.0.
+    // Check if the transform connected to the matrix list is the same
+    // as the one of the deformed mesh. If it isn't it has to be a
+    // placement node which needs to get connected to the placement
+    // matrix list.
+    else if (`nodeType $node` == "rampWeights")
+    {
+        string $items[] = stringToStringArray($input, ".");
+        string $connectedLong[] = `ls -long $items[0]`;
+
+        if ($transform != $connectedLong[0])
+        {
+            brWeightsControllerDisconnectAttr($input, $destAttr);
+            brWeightsControllerConnectAttr($input, $node + ".placementMatrixList[" + $index + "]");
+
+            brWeightsControllerConnectAttr($srcAttr, $destAttr);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// rampWeights and weightsServer are under the terms of the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Author: Ingo Clemens    www.braverabbit.com
+// ---------------------------------------------------------------------

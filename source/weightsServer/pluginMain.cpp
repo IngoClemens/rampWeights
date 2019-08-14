@@ -1,37 +1,56 @@
+// ---------------------------------------------------------------------
 //
-// Procedure Name:
-//      brRampWeightsCreateNode
+//  pluginMain.cpp
 //
-// Description:
-//      Create a new ramp weights node and return it's name.
+//  Created by ingo on 01/01/18.
+//  Copyright (c) 2018 Ingo Clemens. All rights reserved.
 //
-// Input Arguments:
-//      deformer        The name of the deformer node.
-//      name            The name for the new ramp weights node.
-//
-// Return Value:
-//      string          The name of the ramp weights node.
-//
-global proc string brRampWeightsCreateNode( string $deformer, string $channel )
+// ---------------------------------------------------------------------
+
+#include <string>
+
+static const std::string kVERSION = "4.0.0";
+
+#include <maya/MFnPlugin.h>
+
+#include "weightsServer.h"
+
+// ---------------------------------------------------------------------
+// initialization
+// ---------------------------------------------------------------------
+
+MStatus initializePlugin(MObject obj)
 {
-    string $node = `createNode rampWeights`;
+    MStatus status;
+    MFnPlugin plugin(obj, "Ingo Clemens", kVERSION.c_str(), "Any");
 
-    string $nodeName;
-    if ($deformer != "")
-        $nodeName = $deformer + "_";
-    if ($channel != "")
-        $nodeName += $channel + "_";
-    if ($nodeName != "")
-        $node = `rename $node ($nodeName + "RW")`;
+    status = plugin.registerNode("weightsServer", weightsServer::id, weightsServer::creator,
+                                 weightsServer::initialize);
 
-    return $node;
+    if (status != MStatus::kSuccess)
+        status.perror("Register weightsServer node failed.");
+
+    return status;
+}
+
+MStatus uninitializePlugin(MObject obj)
+{
+    MStatus status;
+    MFnPlugin plugin(obj, "Ingo Clemens", kVERSION.c_str(), "Any");
+
+    status = plugin.deregisterNode(weightsServer::id);
+
+    if (status != MStatus::kSuccess)
+        status.perror("Deregister weightsServer node failed.");
+
+    return status;
 }
 
 // ---------------------------------------------------------------------
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// weightsServer is under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the

@@ -9,7 +9,7 @@
 
 #include <string>
 
-static const std::string kVERSION = "3.0.0";
+static const std::string kVERSION = "4.0.0";
 
 #include <iostream>
 #include <cmath>
@@ -30,7 +30,6 @@ static const std::string kVERSION = "3.0.0";
 #include <maya/MFnSingleIndexedComponent.h>
 #include <maya/MFnTypedAttribute.h>
 #include <maya/MGlobal.h>
-#include <maya/MItDependencyGraph.h>
 #include <maya/MMatrix.h>
 #include <maya/MPlug.h>
 #include <maya/MPlugArray.h>
@@ -66,15 +65,14 @@ public:
                                            float value,
                                            int interpolation);
 
-    MStatus getComponents(MPlug componentsPlug,
-                          MFnSingleIndexedComponent &compFn);
-
     static MObject axis;
     static MObject centered;
     static MObject clamp;
     static MObject curve;
     static MObject curveRamp;
     static MObject end;
+    static MObject inputComponentsList;
+    static MObject inputComponents;
     static MObject invert;
     static MObject invertList;
     static MObject matrixList;
@@ -82,11 +80,11 @@ public:
     static MObject mirror;
     static MObject multiply;
     static MObject offset;
+    static MObject placementMatrixList;
     static MObject start;
     static MObject useTransform;
     static MObject weightList;
     static MObject weights;
-    static MObject worldMatrix;
 
     static MTypeId id;
 };
@@ -104,6 +102,8 @@ MObject rampWeights::clamp;
 MObject rampWeights::curve;
 MObject rampWeights::curveRamp;
 MObject rampWeights::end;
+MObject rampWeights::inputComponentsList;
+MObject rampWeights::inputComponents;
 MObject rampWeights::invert;
 MObject rampWeights::invertList;
 MObject rampWeights::matrixList;
@@ -111,11 +111,11 @@ MObject rampWeights::mesh;
 MObject rampWeights::mirror;
 MObject rampWeights::multiply;
 MObject rampWeights::offset;
+MObject rampWeights::placementMatrixList;
 MObject rampWeights::start;
 MObject rampWeights::useTransform;
 MObject rampWeights::weightList;
 MObject rampWeights::weights;
-MObject rampWeights::worldMatrix;
 
 
 // ---------------------------------------------------------------------
@@ -221,8 +221,9 @@ MStatus rampWeights::initialize()
     mAttr.setHidden(true);
     mAttr.setArray(true);
 
-    worldMatrix = mAttr.create("worldMatrix", "wm");
+    placementMatrixList = mAttr.create("placementMatrixList", "pml");
     mAttr.setHidden(true);
+    mAttr.setArray(true);
 
     //
     // MRampAttribute
@@ -238,17 +239,29 @@ MStatus rampWeights::initialize()
 
     MFnTypedAttribute tAttr;
 
-    mesh = tAttr.create("mesh", "m", MFnData::kMesh);
-    tAttr.setHidden(true);
+    inputComponents = tAttr.create("inputComponents", "ic", MFnComponentListData::kComponentList);
 
     curve = tAttr.create("curve", "crv", MFnData::kNurbsCurve);
     tAttr.setHidden(true);
+    tAttr.setArray(true);
+    tAttr.setUsesArrayDataBuilder(true);
+
+    mesh = tAttr.create("mesh", "m", MFnData::kMesh);
+    tAttr.setHidden(true);
+    tAttr.setArray(true);
+    tAttr.setUsesArrayDataBuilder(true);
 
     //
     // MFnCompoundAttribute
     //
 
     MFnCompoundAttribute cAttr;
+
+    inputComponentsList = cAttr.create("inputComponentsList", "icl");
+    cAttr.setHidden(true);
+    cAttr.setArray(true);
+    cAttr.setUsesArrayDataBuilder(true);
+    cAttr.addChild(inputComponents);
 
     weightList = cAttr.create("weightList", "wl");
     cAttr.setHidden(true);
@@ -273,10 +286,12 @@ MStatus rampWeights::initialize()
     addAttribute(curveRamp);
     addAttribute(mesh);
     addAttribute(curve);
+    addAttribute(inputComponentsList);
+    addAttribute(inputComponents);
     addAttribute(weightList);
     addAttribute(weights);
-    addAttribute(worldMatrix);
     addAttribute(matrixList);
+    addAttribute(placementMatrixList);
     addAttribute(invertList);
 
     // -----------------------------------------------------------------
@@ -296,9 +311,9 @@ MStatus rampWeights::initialize()
     attributeAffects(mirror, weightList);
     attributeAffects(multiply, weightList);
     attributeAffects(offset, weightList);
+    attributeAffects(placementMatrixList, weightList);
     attributeAffects(start, weightList);
     attributeAffects(useTransform, weightList);
-    attributeAffects(worldMatrix, weightList);
 
     return MS::kSuccess;
 }
@@ -352,28 +367,9 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
 {
     MStatus status = MS::kSuccess;
 
-    unsigned int i;
+    unsigned int i, j, k;
 
     MObject thisNode = this->thisMObject();
-
-    if (plug != weights)
-        return MStatus::kUnknownParameter;
-
-    if (!plug.isConnected())
-        return status;
-
-    // In order to be able to handle multiple blend shape channels or
-    // deformers it's necessary to generate separate weight lists,
-    // therefore the weightList output attribute exists as an array.
-    // For creating the weights for each list the index of the current
-    // weights plug needs to be known. This index can be derived from
-    // the indexed weightList plug which is the parent of the current
-    // weights plug.
-    // It's not possible to get the index from a newly referenced
-    // weights plug (see (*)), therefore the current plug passed
-    // as the compute's method argument is used.
-    MPlug parentPlug = plug.parent();
-    unsigned int parentIndex = parentPlug.logicalIndex();
 
     // -----------------------------------------------------------------
     // attributes
@@ -391,9 +387,8 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     CHECK_MSTATUS_AND_RETURN_IT(status);
     bool clampVal = clampData.asBool();
 
-    MDataHandle curveData = data.inputValue(curve, &status);
+    MArrayDataHandle curveArrayDataHandle = data.inputArrayValue(curve, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
-    MObject curveObj = curveData.asNurbsCurve();
 
     MRampAttribute curveAttr(thisNode, curveRamp, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -401,6 +396,9 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     MDataHandle endData = data.inputValue(end, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
     double endVal = endData.asDouble();
+
+    MArrayDataHandle inputComponentsListArrayDataHandle = data.inputArrayValue(inputComponentsList, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
 
     MDataHandle invertData = data.inputValue(invert, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -412,9 +410,8 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     MArrayDataHandle matrixListArrayDataHandle = data.inputArrayValue(matrixList, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
 
-    MDataHandle meshData = data.inputValue(mesh, &status);
+    MArrayDataHandle meshArrayDataHandle = data.inputArrayValue(mesh, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
-    MObject meshObj = meshData.asMesh();
 
     MDataHandle mirrorData = data.inputValue(mirror, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -428,6 +425,9 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     CHECK_MSTATUS_AND_RETURN_IT(status);
     double offsetVal = offsetData.asDouble();
 
+    MArrayDataHandle placementMatrixListArrayDataHandle = data.inputArrayValue(placementMatrixList, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
     MDataHandle startData = data.inputValue(start, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
     double startVal = startData.asDouble();
@@ -436,314 +436,324 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     CHECK_MSTATUS_AND_RETURN_IT(status);
     bool useTransformVal = useTransformData.asBool();
 
-    MDataHandle worldMatrixData = data.inputValue(worldMatrix, &status);
-    CHECK_MSTATUS_AND_RETURN_IT(status);
-    MMatrix worldMatrixVal = worldMatrixData.asMatrix();
-
     // -----------------------------------------------------------------
-    // get the driven deformer node
+    // get the weight list indices which need to get computed
     // -----------------------------------------------------------------
 
-    MPlugArray weightsOutPlugArray;
-    plug.connectedTo(weightsOutPlugArray, false, true, &status);
-    CHECK_MSTATUS_AND_RETURN_IT(status);
-    MObject deformerObj = weightsOutPlugArray[0].node();
-    MFnDependencyNode deformerFn(deformerObj);
+    // In order to be able to handle multiple blend shape channels or
+    // deformers it's necessary to generate separate weight lists,
+    // therefore the weightList output attribute exists as an array.
+    // For creating the weights for each list the index of the current
+    // weights plug needs to be known. This index can be derived from
+    // the indexed weightList plug which is the parent of the current
+    // weights plug.
 
-    // -----------------------------------------------------------------
-    // check mesh or curve and get its points
-    // -----------------------------------------------------------------
+    MPlug weightsPlug(thisNode, weights);
+    MIntArray outputIndices;
 
-    MDagPath shapeDag;
-    MPointArray points;
-
-    int inType = 0;
-
-    //
-    // check for a mesh
-    //
-    MItDependencyGraph dependIter(deformerObj,
-                                  MFn::kMesh,
-                                  MItDependencyGraph::kUpstream,
-                                  MItDependencyGraph::kDepthFirst,
-                                  MItDependencyGraph::kNodeLevel,
-                                  &status);
-
-    for (; !dependIter.isDone(); dependIter.next())
+    // DG Evaluation:
+    // In this evaluation mode the computation request comes from the
+    // weightList[].weights plug. Therefore the weight list index can be
+    // found by looking at the logical index of the parent plug, which
+    // is the weightList plug itself.
+    if (plug == weights)
     {
-        MObject currentObj = dependIter.currentItem();
-        MFnDagNode currentFn(currentObj, &status);
-        if (status && !inType && currentFn.isIntermediateObject())
-        {
-            MDagPath::getAPathTo(currentObj, shapeDag);
-            MFnMesh meshFn(shapeDag);
-            meshFn.getPoints(points, MSpace::kWorld);
+        MPlug parentPlug = plug.parent();
+        if (plug.isConnected())
+            outputIndices.append((int)parentPlug.logicalIndex());
+    }
+    // Parallel evaluation:
+    // During parallel evaluation the weightList plug is requesting
+    // computation. In this case we need to collect all existing indices
+    // and loop through them sequentially.
+    else if (plug == weightList)
+    {
+        // It doesn't seem possible to use
+        // getExistingArrayAttributeIndices on a const plug. The plug is
+        // copied to avoid this restriction.
+        MPlug weightListPlug = plug;
+        MIntArray existingIndices;
+        weightListPlug.getExistingArrayAttributeIndices(existingIndices, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
 
-            inType = 1;
+        unsigned int numIndices = existingIndices.length();
+
+        for (i = 0; i < numIndices; i ++)
+        {
+            weightsPlug.selectAncestorLogicalIndex((unsigned)existingIndices[i], weightList);
+            if (weightsPlug.isConnected())
+                outputIndices.append(existingIndices[i]);
         }
     }
+    else
+        return MStatus::kUnknownParameter;
 
-    //
-    // check for a curve
-    //
-    if (!inType)
+    // -----------------------------------------------------------------
+    // process the output indices
+    // -----------------------------------------------------------------
+
+    for (i = 0; i < outputIndices.length(); i ++)
     {
-        dependIter.resetTo(deformerObj,
-                           MFn::kNurbsCurve,
-                           MItDependencyGraph::kUpstream,
-                           MItDependencyGraph::kDepthFirst,
-                           MItDependencyGraph::kNodeLevel);
+        unsigned int listIndex = (unsigned)outputIndices[i];
+        weightsPlug.selectAncestorLogicalIndex(listIndex, weightList);
 
-        for (; !dependIter.isDone(); dependIter.next())
+        // -------------------------------------------------------------
+        // get the driven deformer node
+        // -------------------------------------------------------------
+
+        MPlugArray weightsOutPlugArray;
+        weightsPlug.connectedTo(weightsOutPlugArray, false, true, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        MObject deformerObj;
+        if (weightsOutPlugArray.length())
+            deformerObj = weightsOutPlugArray[0].node();
+        MFnDependencyNode deformerFn(deformerObj);
+
+        // -------------------------------------------------------------
+        // check mesh or curve and get its points
+        // -------------------------------------------------------------
+
+        MDagPath shapeDag;
+        MPointArray points;
+
+        int inType = 0;
+
+        //
+        // check for a mesh
+        //
+
+        // First check the mesh array input at the current index. If
+        // there is a mesh present use this to get the point data.
+        MPlug meshPlug(thisNode, mesh);
+        MPlug indexedMeshPlug = meshPlug.elementByLogicalIndex(listIndex, &status);
+        if (status == MStatus::kSuccess)
         {
-            MObject currentObj = dependIter.currentItem();
-            MFnDagNode currentFn(currentObj, &status);
-            if (status && !inType && currentFn.isIntermediateObject())
+            if (indexedMeshPlug.isConnected())
             {
-                MDagPath::getAPathTo(currentObj, shapeDag);
-                MFnNurbsCurve curveFn(shapeDag);
-                curveFn.getCVs(points, MSpace::kObject);
+                meshArrayDataHandle.jumpToElement(listIndex);
+                MDataHandle meshDataHandle = meshArrayDataHandle.inputValue(&status);
+                CHECK_MSTATUS_AND_RETURN_IT(status);
+                MObject meshObj = meshDataHandle.asMesh();
+                MFnMesh meshFn(meshObj, &status);
+                CHECK_MSTATUS_AND_RETURN_IT(status);
+                meshFn.getPoints(points, MSpace::kWorld);
 
-                inType = 2;
+                // Set the geometry type to mesh.
+                inType = 1;
             }
         }
-    }
 
-    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //
+        // check for a curve
+        //
 
-    if (inType == 0)
-        return MStatus::kFailure;
-
-    // -----------------------------------------------------------------
-    // get the matrices
-    // -----------------------------------------------------------------
-
-    // Get the matrix of the deformed geometry.
-    // If the transform is already connected get the matrix directly.
-    // The advantage of this connection is that the node gets computed
-    // when the matrix attribute changes.
-    MMatrix inputMatrix;
-    MPlug worldMatrixPlug(thisNode, worldMatrix);
-    if (worldMatrixPlug.isConnected())
-    {
-        inputMatrix = worldMatrixVal.inverse();
-    }
-    // If the world matrix plug is not connected get the transform node
-    // of the deformed mesh and the matrix from it. The result is the
-    // same as with the connection but it doesn't update when the node
-    // is moved.
-    else
-    {
-        MFnDagNode shapeDagFn(shapeDag);
-        MObject transformObj = shapeDagFn.parent(0);
-        MFnDagNode transformDagFn(transformObj);
-        inputMatrix = transformDagFn.transformationMatrix().inverse();
-    }
-
-    // Get the placement matrix for the current index in case it's
-    // connected. If there is no connection then the matrix will simply
-    // remain empty which doesn't affect the matrix calculations.
-    MMatrix placementMatrix;
-    MPlug matrixListPlug(thisNode, matrixList);
-    MPlug indexedMatrixPlug = matrixListPlug.elementByLogicalIndex(parentIndex, &status);
-    if (status == MStatus::kSuccess)
-    {
-        if (indexedMatrixPlug.isConnected())
+        // If there is no connected mesh and the deformed object is not
+        // a mesh check for a connected curve at the current index.
+        if (!inType)
         {
-            matrixListArrayDataHandle.jumpToElement(parentIndex);
-            MDataHandle matrixDataHandle = matrixListArrayDataHandle.inputValue(&status);
-            CHECK_MSTATUS_AND_RETURN_IT(status);
-            placementMatrix = matrixDataHandle.asMatrix().inverse();
+            MPlug curvePlug(thisNode, curve);
+            MPlug indexedCurvePlug = curvePlug.elementByLogicalIndex(listIndex, &status);
+            if (status == MStatus::kSuccess)
+            {
+                if (indexedCurvePlug.isConnected())
+                {
+                    curveArrayDataHandle.jumpToElement(listIndex);
+                    MDataHandle curveDataHandle = curveArrayDataHandle.inputValue(&status);
+                    CHECK_MSTATUS_AND_RETURN_IT(status);
+                    MObject curveObj = curveDataHandle.asNurbsCurve();
+                    MFnNurbsCurve curveFn(curveObj, &status);
+                    CHECK_MSTATUS_AND_RETURN_IT(status);
+                    curveFn.getCVs(points, MSpace::kObject);
+
+                    inType = 2;
+                }
+            }
         }
-    }
 
-    // Multiply with the inverse world matrix if the transformation
-    // should not be considered.
-    if (!useTransformVal)
-        placementMatrix *= inputMatrix;
-
-    // -----------------------------------------------------------------
-    // indexed invert
-    // -----------------------------------------------------------------
-
-    bool indexedInvertVal = false;
-
-    if (invertListArrayDataHandle.jumpToElement(parentIndex))
-    {
-        MDataHandle invertListDataHandle = invertListArrayDataHandle.inputValue(&status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-        indexedInvertVal = invertListDataHandle.asBool();
-    }
-
-    // -----------------------------------------------------------------
-    // defining settings
-    // -----------------------------------------------------------------
-
-    if (centeredVal && startVal != endVal)
-    {
-        double min = startVal;
-        double max = endVal;
-
-        min = startVal - ((endVal - startVal) / 2.0);
-        max = endVal - ((endVal - startVal) / 2.0);
-
-        startVal = min;
-        endVal = max;
-    }
-
-    startVal += offsetVal;
-    endVal += offsetVal;
-
-    if (mirrorVal && clampVal && startVal < 0.0)
-        startVal = 0.0;
-
-    // -----------------------------------------------------------------
-    // get the components
-    // -----------------------------------------------------------------
-
-    // Create a list of the components which are affected.
-    MFnSingleIndexedComponent compFn;
-    MObject vtxCompObj = compFn.create(MFn::kMeshVertComponent);
-
-    MPlug inputPlug;
-    MPlug componentsPlug;
-
-    // In case of a blend shape deformer the components can be derived
-    // from the target item to which the output weights plug is
-    // connected to.
-    if (deformerObj.hasFn(MFn::kBlendShape))
-    {
-        MPlug groupPlug = weightsOutPlugArray[0].parent();
-        MPlug itemPlug = groupPlug.child(0).elementByLogicalIndex(6000);
-        MPlug plug;
-#if MAYA_API_VERSION >= 201600
-        componentsPlug = itemPlug.child(4, &status);
-#else
-        componentsPlug = itemPlug.child(2, &status);
-#endif
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-    }
-    // In case of any other deformer the component indices are stored on
-    // the deformer group node.
-    else
-    {
-        inputPlug = deformerFn.findPlug("input", true, &status);
         CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        // The input plug can have multiple elements because all regular
-        // deformers can affect multiple objects. The weights are
-        // applied globally to the entire deformation and are not
-        // element specific, therefore only the first connected object
-        // is respected.
-        MPlug geoItem = inputPlug[0].child(0, &status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-        MPlugArray connectedPlugs;
-        geoItem.connectedTo(connectedPlugs, true, false, &status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
+        if (inType == 0)
+            return MStatus::kFailure;
 
-        MFnDependencyNode groupNodeFn(connectedPlugs[0].node());
-        componentsPlug = groupNodeFn.findPlug("inputComponents", true, &status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-    }
+        // -------------------------------------------------------------
+        // get the matrices
+        // -------------------------------------------------------------
 
-    getComponents(componentsPlug, compFn);
-
-    // -----------------------------------------------------------------
-    // create weights
-    // -----------------------------------------------------------------
-
-    unsigned int elementNum = (unsigned)compFn.elementCount();
-
-    // (*) Get the weights array plug. Even though this is already
-    // referenced through 'plug' it's necessary to do this separately
-    // just to be able to set the ancestor logical index.
-    MPlug weightsPlug(thisNode, weights);
-    weightsPlug.selectAncestorLogicalIndex(parentIndex, weightList);
-
-    // Create the handles and array builder for the weights plug.
-    // Using the MArrayBuilder to collect the weights and then set the
-    // output weights array in a single step is much faster than setting
-    // the value for each weight index individually.
-    MDataHandle weightsHandle = weightsPlug.constructHandle(data);
-    MArrayDataHandle weightsArrayHandle(weightsHandle);
-    MArrayDataBuilder weightsBuilder = weightsArrayHandle.builder(&status);
-    CHECK_MSTATUS_AND_RETURN_IT(status);
-
-    for (i = 0; i < elementNum; i ++)
-    {
-        unsigned int index = (unsigned)compFn.element((int)i);
-
-        MPoint point = points[index];
-        MPoint originalPoint = point * placementMatrix;
-
-        float value = 0.0;
-
-        double pos = originalPoint.x;
-        if (axisVal == 1)
-            pos = originalPoint.y;
-        else if (axisVal == 2)
-            pos = originalPoint.z;
-
-        if (mirrorVal)
-            pos = std::abs(pos);
-
-        if (pos < startVal)
-            ;
-        else
+        MMatrix inputMatrix;
+        MPlug matrixListPlug(thisNode, matrixList);
+        MPlug indexedMatrixPlug = matrixListPlug.elementByLogicalIndex(listIndex, &status);
+        if (status == MStatus::kSuccess)
         {
-            if (pos > endVal)
-                curveAttr.getValueAtPosition(1.0, value);
+            if (indexedMatrixPlug.isConnected())
+            {
+                matrixListArrayDataHandle.jumpToElement(listIndex);
+                MDataHandle matrixDataHandle = matrixListArrayDataHandle.inputValue(&status);
+                CHECK_MSTATUS_AND_RETURN_IT(status);
+                inputMatrix = matrixDataHandle.asMatrix().inverse();
+            }
+        }
+
+        // Get the placement matrix for the current index in case it's
+        // connected. If there is no connection then the matrix will
+        // simply remain empty which doesn't affect the matrix calculations.
+        MMatrix placementMatrix;
+        MPlug placementMatrixListPlug(thisNode, placementMatrixList);
+        indexedMatrixPlug = placementMatrixListPlug.elementByLogicalIndex(listIndex, &status);
+        if (status == MStatus::kSuccess)
+        {
+            if (indexedMatrixPlug.isConnected())
+            {
+                placementMatrixListArrayDataHandle.jumpToElement(listIndex);
+                MDataHandle matrixDataHandle = placementMatrixListArrayDataHandle.inputValue(&status);
+                CHECK_MSTATUS_AND_RETURN_IT(status);
+                placementMatrix = matrixDataHandle.asMatrix().inverse();
+            }
+        }
+
+        // Multiply with the inverse world matrix if the transformation
+        // should not be considered.
+        if (!useTransformVal)
+            placementMatrix *= inputMatrix;
+
+        // -------------------------------------------------------------
+        // indexed invert
+        // -------------------------------------------------------------
+
+        bool indexedInvertVal = false;
+
+        if (invertListArrayDataHandle.jumpToElement(listIndex))
+        {
+            MDataHandle invertListDataHandle = invertListArrayDataHandle.inputValue(&status);
+            CHECK_MSTATUS_AND_RETURN_IT(status);
+            indexedInvertVal = invertListDataHandle.asBool();
+        }
+
+        // -------------------------------------------------------------
+        // defining settings
+        // -------------------------------------------------------------
+
+        if (centeredVal && startVal != endVal)
+        {
+            double min = startVal;
+            double max = endVal;
+
+            min = startVal - ((endVal - startVal) / 2.0);
+            max = endVal - ((endVal - startVal) / 2.0);
+
+            startVal = min;
+            endVal = max;
+        }
+
+        startVal += offsetVal;
+        endVal += offsetVal;
+
+        if (mirrorVal && clampVal && startVal < 0.0)
+            startVal = 0.0;
+
+        // -------------------------------------------------------------
+        // get the components
+        // -------------------------------------------------------------
+
+        // The input components are a copy of the components the
+        // deformer affects. The data has to be copied over when the
+        // ramp weights node gets connected to the deformer weights.
+        // Parallel evaluation doesn't allow to draw data from a node
+        // downstream but the components are mandatory. Therefore the
+        // components are copied over and need to get updated manually
+        // whenever the affected components on the deformer change.
+
+        inputComponentsListArrayDataHandle.jumpToElement(listIndex);
+        MDataHandle inputComponentsDataHandle = inputComponentsListArrayDataHandle.inputValue(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        MObject componentsObj = inputComponentsDataHandle.data();
+
+        MFnComponentListData compListFn(componentsObj, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        MFnSingleIndexedComponent compFn;
+        MObject vtxCompObj = compFn.create(MFn::kMeshVertComponent);
+
+        // The components are stored in a sparse array which means that
+        // each array entry contains one or more ordered components.
+        // Example: vtx[61] vtx[76:78] vtx[91:95] vtx[107:112]
+        for (j = 0; j < compListFn.length(); j ++)
+        {
+            MObject comp = compListFn[j];
+            MFnSingleIndexedComponent indexedComp(comp);
+
+            for (k = 0; k < (unsigned)indexedComp.elementCount(); k ++)
+                compFn.addElement(indexedComp.element((int)k));
+        }
+
+        unsigned int elementNum = (unsigned)compFn.elementCount();
+
+        // -------------------------------------------------------------
+        // create weights
+        // -------------------------------------------------------------
+
+        // Create the handles and array builder for the weights plug.
+        // Using the MArrayBuilder to collect the weights and then set
+        // the output weights array in a single step is much faster than
+        // setting the value for each weight index individually.
+        MDataHandle weightsHandle = weightsPlug.constructHandle(data);
+        MArrayDataHandle weightsArrayHandle(weightsHandle);
+        MArrayDataBuilder weightsBuilder = weightsArrayHandle.builder(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        for (j = 0; j < elementNum; j ++)
+        {
+            unsigned int index = (unsigned)compFn.element((int)j);
+
+            MPoint point = points[index];
+            MPoint originalPoint = point * placementMatrix;
+
+            float value = 0.0;
+
+            double pos = originalPoint.x;
+            if (axisVal == 1)
+                pos = originalPoint.y;
+            else if (axisVal == 2)
+                pos = originalPoint.z;
+
+            if (mirrorVal)
+                pos = std::abs(pos);
+
+            if (pos < startVal)
+                ;
             else
             {
-                float curvePos = (float)((pos - startVal) / (endVal - startVal));
-                curveAttr.getValueAtPosition(curvePos, value);
+                if (pos > endVal)
+                    curveAttr.getValueAtPosition(1.0, value);
+                else
+                {
+                    float curvePos = (float)((pos - startVal) / (endVal - startVal));
+                    curveAttr.getValueAtPosition(curvePos, value);
+                }
             }
+            if (value < 0.0)
+                value = 0.0;
+            else if (value > 1.0)
+                value = 1.0;
+
+            if (invertVal)
+                value = 1 - value;
+            if (indexedInvertVal)
+                value = 1 - value;
+
+            MDataHandle weightsIdHandle = weightsBuilder.addElement(index);
+            weightsIdHandle.set(value * (float)multiplyVal);
         }
-        if (value < 0.0)
-            value = 0.0;
-        else if (value > 1.0)
-            value = 1.0;
 
-        if (invertVal)
-            value = 1 - value;
-        if (indexedInvertVal)
-            value = 1 - value;
+        weightsArrayHandle.set(weightsBuilder);
+        weightsPlug.setValue(weightsHandle);
+        weightsPlug.destructHandle(weightsHandle);
 
-        MDataHandle weightsIdHandle = weightsBuilder.addElement(index);
-        weightsIdHandle.set(value * (float)multiplyVal);
+        data.setClean(weightsPlug);
     }
 
-    weightsArrayHandle.set(weightsBuilder);
-    weightsPlug.setValue(weightsHandle);
-    weightsPlug.destructHandle(weightsHandle);
-
-    data.setClean(weightsPlug);
-
-    return status;
-}
-
-
-MStatus rampWeights::getComponents(MPlug componentsPlug,
-                                   MFnSingleIndexedComponent &compFn)
-{
-    MStatus status = MStatus::kSuccess;
-
-    unsigned int i, j;
-
-    MFnComponentListData compListFn(componentsPlug.asMObject());
-
-    // Get the components and store them in the vtxList.
-    // The components are stored in a sparse array which means that each
-    // array entry contains one or more ordered components.
-    // Example: vtx[61] vtx[76:78] vtx[91:95] vtx[107:112]
-    for (i = 0; i < compListFn.length(); i ++)
-    {
-        MObject comp = compListFn[i];
-        MFnSingleIndexedComponent indexedComp(comp);
-
-        for (j = 0; j < (unsigned)indexedComp.elementCount(); j ++)
-            compFn.addElement(indexedComp.element((int)j));
-    }
+    MDataHandle weightListData = data.outputValue(weightList, &status);
+    weightListData.setClean();
 
     return status;
 }
@@ -768,7 +778,7 @@ MStatus initializePlugin(MObject obj)
 }
 
 
-MStatus uninitializePlugin( MObject obj)
+MStatus uninitializePlugin(MObject obj)
 {
     MStatus status;
     MFnPlugin plugin(obj, "Ingo Clemens", kVERSION.c_str(), "Any");

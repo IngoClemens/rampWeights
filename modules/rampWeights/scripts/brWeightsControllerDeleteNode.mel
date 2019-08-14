@@ -1,23 +1,24 @@
 //
 // Procedure Name:
-//      brRampWeightsDeleteNode
+//      brWeightsControllerDeleteNode
 //
 // Description:
-//      Delete the selected ramp weights node and also remove any
+//      Delete the selected weights controller node and also remove any
 //      weights if requested.
 //
 // Input Arguments:
+//      type            The node type.
 //      removeWeights   True, if any controlled weights should be reset.
 //
 // Return Value:
 //      int             True, if the removal was successful.
 //
-global proc int brRampWeightsDeleteNode( int $removeWeights )
+global proc int brWeightsControllerDeleteNode( string $type, int $removeWeights )
 {
-    string $sel[] = `ls -selection -type "rampWeights"`;
+    string $sel[] = `ls -selection -type $type`;
     if (!size($sel))
     {
-        warning "Select one or more rampWeights nodes to delete";
+        warning ("Select one or more " + $type + " nodes to delete");
         return 0;
     }
 
@@ -38,8 +39,8 @@ global proc int brRampWeightsDeleteNode( int $removeWeights )
                 if (`nodeType $items[0]` == "blendShape")
                 {
                     disconnectAttr $conn[0] $conn[1];
-                    string $cmd = "import brRampWeights;";
-                    $cmd += "brRampWeights.clearWeights(\"" + $conn[1] + "\")";
+                    string $cmd = "import brWeightsController;";
+                    $cmd += "brWeightsController.clearWeights(\"" + $conn[1] + "\")";
                     python($cmd);
                 }
                 else
@@ -57,7 +58,7 @@ global proc int brRampWeightsDeleteNode( int $removeWeights )
 // MIT License
 //
 // Copyright (c) 2019 Ingo Clemens, brave rabbit
-// rampWeights is under the terms of the MIT License
+// rampWeights and weightsServer are under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
