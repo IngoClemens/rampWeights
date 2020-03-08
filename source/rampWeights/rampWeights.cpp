@@ -9,7 +9,7 @@
 
 #include <string>
 
-static const std::string kVERSION = "4.0.0";
+static const std::string kVERSION = "4.1.0";
 
 #include <iostream>
 #include <cmath>
@@ -435,6 +435,28 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     MDataHandle useTransformData = data.inputValue(useTransform, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
     bool useTransformVal = useTransformData.asBool();
+    
+    // -------------------------------------------------------------
+    // defining basic range settings
+    // -------------------------------------------------------------
+    
+    if (centeredVal && startVal != endVal)
+    {
+        double min = startVal;
+        double max = endVal;
+        
+        min = startVal - ((endVal - startVal) / 2.0);
+        max = endVal - ((endVal - startVal) / 2.0);
+        
+        startVal = min;
+        endVal = max;
+    }
+    
+    startVal += offsetVal;
+    endVal += offsetVal;
+    
+    if (mirrorVal && clampVal && startVal < 0.0)
+        startVal = 0.0;
 
     // -----------------------------------------------------------------
     // get the weight list indices which need to get computed
@@ -628,28 +650,6 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
             CHECK_MSTATUS_AND_RETURN_IT(status);
             indexedInvertVal = invertListDataHandle.asBool();
         }
-
-        // -------------------------------------------------------------
-        // defining settings
-        // -------------------------------------------------------------
-
-        if (centeredVal && startVal != endVal)
-        {
-            double min = startVal;
-            double max = endVal;
-
-            min = startVal - ((endVal - startVal) / 2.0);
-            max = endVal - ((endVal - startVal) / 2.0);
-
-            startVal = min;
-            endVal = max;
-        }
-
-        startVal += offsetVal;
-        endVal += offsetVal;
-
-        if (mirrorVal && clampVal && startVal < 0.0)
-            startVal = 0.0;
 
         // -------------------------------------------------------------
         // get the components

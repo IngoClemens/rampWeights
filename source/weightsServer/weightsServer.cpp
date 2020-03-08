@@ -1188,7 +1188,7 @@ MStatus weightsServer::compute(const MPlug& plug, MDataBlock& data)
                                 influenceValue *= curveValue;
                             }
 
-                            value += influenceValue * scaleArray[j] * globalInfluenceScaleVal;
+                            value += influenceValue * (float)scaleArray[j] * (float)globalInfluenceScaleVal;
                             outputWeights.set(value, m);
                         }
                     }

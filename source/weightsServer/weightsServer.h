@@ -11,7 +11,8 @@
 #define weightsServer_h
 
 #include <iostream>
-#include <tbb/tbb.h>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 
 #include <maya/MArrayDataBuilder.h>
 #include <maya/MBoundingBox.h>
