@@ -124,34 +124,22 @@ global proc int brWeightsControllerLoadPlugin( string $type )
 global proc brWeightsControllerAddMenuCommand()
 {
     global string $gAnimationMenus[];
+    global string $gNewModelingMenus[];
+    global string $gRiggingMenus[];
 
     string $cmd;
 
-    float $version = `mayaVersion`;
-    if ($version > 2015)
-    {
-        global string $gNewModelingMenus[];
-        global string $gRiggingMenus[];
+    $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
+    $cmd += "; brWeightsControllerCreateMenuItems " + $gAnimationMenus[3] + " 1;";
+    $gAnimationMenus[3] = `menu -edit -postMenuCommand $cmd $gAnimationMenus[3]`;
 
-        $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
-        $cmd += "; brWeightsControllerCreateMenuItems " + $gAnimationMenus[3] + " 1;";
-        $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
+    $cmd = `menu -query -postMenuCommand $gNewModelingMenus[6]`;
+    $cmd += "; brWeightsControllerCreateMenuItems " + $gNewModelingMenus[6] + " 2;";
+    $gNewModelingMenus[6] = `menu -edit -postMenuCommand $cmd $gNewModelingMenus[6]`;
 
-        $cmd = `menu -query -postMenuCommand $gNewModelingMenus[6]`;
-        $cmd += "; brWeightsControllerCreateMenuItems " + $gNewModelingMenus[6] + " 2;";
-        $gNewModelingMenus[6] = `menu -e -pmc $cmd $gNewModelingMenus[6]`;
-
-        $cmd = `menu -query -postMenuCommand $gRiggingMenus[2]`;
-        $cmd += "; brWeightsControllerCreateMenuItems " + $gRiggingMenus[2] + " 3;";
-        $gRiggingMenus[2] = `menu -e -pmc $cmd $gRiggingMenus[2]`;
-    }
-    else
-    {
-        $cmd = `menu -query -postMenuCommand $gAnimationMenus[3]`;
-        $cmd += "; brWeightsControllerCreateMenuItems " + $gAnimationMenus[3] + " 1;";
-        $gAnimationMenus[3] = `menu -e -pmc $cmd $gAnimationMenus[3]`;
-
-    }
+    $cmd = `menu -query -postMenuCommand $gRiggingMenus[2]`;
+    $cmd += "; brWeightsControllerCreateMenuItems " + $gRiggingMenus[2] + " 3;";
+    $gRiggingMenus[2] = `menu -edit -postMenuCommand $cmd $gRiggingMenus[2]`;
 }
 
 
@@ -210,13 +198,9 @@ global proc brWeightsControllerCreateMenuItems( string $parent, int $menuIndex )
     if (`menuItem -query -exists ("brWeightsControllerMenuDivider" + $menuIndex)`)
         return;
 
-    int $version = `mayaVersion`;
-
     setParent -menu $parent;
 
-    string $div = "";
-    if ($version >= 2015)
-        $div = "-dividerLabel \"Weights Controller\" ";
+    string $div = "-dividerLabel \"Weights Controller\" ";
     eval("menuItem -divider 1 " + $div + "brWeightsControllerMenuDivider" + $menuIndex);
 
     addMenuItems($menuIndex);
