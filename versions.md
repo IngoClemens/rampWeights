@@ -1,3 +1,6 @@
+**4.1.0 (2021-03-29) - Update**
+* Added support for Maya 2022.
+
 **4.1.0 (2020-03-07)**
 * Added support for Maya 2020.
 * Fixed that when using more than one controller source the attributes will perform with an offset resulting in a shift of the effect.

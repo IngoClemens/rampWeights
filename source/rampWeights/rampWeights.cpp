@@ -435,26 +435,26 @@ MStatus rampWeights::compute(const MPlug& plug, MDataBlock& data)
     MDataHandle useTransformData = data.inputValue(useTransform, &status);
     CHECK_MSTATUS_AND_RETURN_IT(status);
     bool useTransformVal = useTransformData.asBool();
-    
+
     // -------------------------------------------------------------
     // defining basic range settings
     // -------------------------------------------------------------
-    
+
     if (centeredVal && startVal != endVal)
     {
         double min = startVal;
         double max = endVal;
-        
+
         min = startVal - ((endVal - startVal) / 2.0);
         max = endVal - ((endVal - startVal) / 2.0);
-        
+
         startVal = min;
         endVal = max;
     }
-    
+
     startVal += offsetVal;
     endVal += offsetVal;
-    
+
     if (mirrorVal && clampVal && startVal < 0.0)
         startVal = 0.0;
 
@@ -794,7 +794,7 @@ MStatus uninitializePlugin(MObject obj)
 // ---------------------------------------------------------------------
 // MIT License
 //
-// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// Copyright (c) 2021 Ingo Clemens, brave rabbit
 // rampWeights is under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining

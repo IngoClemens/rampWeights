@@ -3,7 +3,7 @@
 //  weightsServer.h
 //
 //  Created by ingo on 01/01/18.
-//  Copyright (c) 2018 Ingo Clemens. All rights reserved.
+//  Copyright (c) 2021 Ingo Clemens. All rights reserved.
 //
 // ---------------------------------------------------------------------
 
@@ -109,7 +109,7 @@ public:
 // ---------------------------------------------------------------------
 // MIT License
 //
-// Copyright (c) 2019 Ingo Clemens, brave rabbit
+// Copyright (c) 2021 Ingo Clemens, brave rabbit
 // weightsServer is under the terms of the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining
