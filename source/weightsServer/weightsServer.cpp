@@ -902,8 +902,13 @@ MStatus weightsServer::compute(const MPlug& plug, MDataBlock& data)
             MObject comp = compListFn[j];
             MFnSingleIndexedComponent indexedComp(comp);
 
-            for (k = 0; k < (unsigned)indexedComp.elementCount(); k ++)
-                compFn.addElement(indexedComp.element((int)k));
+            if (!indexedComp.elementCount())
+                compFn.setCompleteData(int(points.length()));
+            else
+            {
+                for (k = 0; k < (unsigned)indexedComp.elementCount(); k ++)
+                    compFn.addElement(indexedComp.element((int)k));
+            }
         }
 
         unsigned int elementNum = (unsigned)compFn.elementCount();
