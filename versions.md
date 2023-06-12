@@ -1,3 +1,6 @@
+**4.1.1 (2023-06-12)**
+* Added support for Maya 2024.
+
 **4.1.1 (2022-06-01)**
 * Added support for Maya 2023.
 * Fixed an issue related to an empty deformer component list.
