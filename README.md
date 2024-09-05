@@ -1,7 +1,10 @@
 # rampWeights & weightsServer
 Weight controller nodes for Autodesk Maya to control blend shape weights or weighted deformers for various effects.
 
-Originally the plug-ins were part of the blend shape editor [SHAPES](http://www.braverabbit.com/shapes/). The open source release is intended to give easier access to these nodes even without the editor.
+Even though the tool is Open Source we appreciate if you would consider support for continued development via [Gumroad](https://braverabbit.gumroad.com/l/rampWeightsMaya)
+Thank you!
+
+Originally the plug-ins were part of the blend shape editor [SHAPES](http://www.braverabbit.com/shapes/). The separate release is intended to give easier access to these nodes even without the editor.
 
 ## Videos
 [rampWeights on Vimeo](https://vimeo.com/311842397)
