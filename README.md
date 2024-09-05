@@ -7,9 +7,9 @@ Thank you!
 Originally the plug-ins were part of the blend shape editor [SHAPES](http://www.braverabbit.com/shapes/). The separate release is intended to give easier access to these nodes even without the editor.
 
 ## Videos
-[rampWeights on Vimeo](https://vimeo.com/311842397)
+[rampWeights on YouTube](https://youtu.be/YqwZbWAqXeQ)
 
-[weightsServer on Vimeo](https://vimeo.com/256378129)
+[weightsServer on YouTube](https://youtu.be/bp0jOCsrpJM)
 
 ## Installation
 Installation is easy with the included installer.
