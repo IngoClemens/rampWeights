@@ -1103,7 +1103,7 @@ def disableButtons():
     cmds.button(INSTALL_BUTTON,
                 edit=True,
                 label="Close",
-                command="cmds.deleteUI('{}')".format(INSTALL_WIN))
+                command="maya.cmds.deleteUI('{}')".format(INSTALL_WIN))
     cmds.button(UNINSTALL_BUTTON,
                 edit=True,
                 enable=False)
@@ -1165,7 +1165,7 @@ def onMayaDroppedPythonFile(*args, **kwargs):
 # ----------------------------------------------------------------------
 # License
 #
-# Copyright (c) 2021 Ingo Clemens, brave rabbit
+# Copyright (c) 2025 Ingo Clemens, brave rabbit
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 # EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
